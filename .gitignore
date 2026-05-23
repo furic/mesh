@@ -1,0 +1,30 @@
+node_modules
+
+# Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Playwright MCP screenshots + logs (developer artefacts, not source)
+.playwright-mcp/
+mesh-*.png
+
+# Claude Code local config (per-developer Bash permission allowlists, etc.)
+.claude/

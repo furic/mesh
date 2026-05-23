@@ -6,6 +6,8 @@
 
 **🌐 Live demo →** [mesh-pi-topaz.vercel.app](https://mesh-pi-topaz.vercel.app/)
 
+*Built in one day for the **Claude Impact Lab** hackathon (Melbourne, 23 May 2026).*
+
 ![Melbourne map with Carlton selected, tilted to 2.5D with 3D building extrusion](docs/screenshots/map-hero.png)
 
 ## What it is

@@ -3,13 +3,17 @@
   import favicon from '$lib/assets/favicon.svg'
   import { page } from '$app/state'
   import { userStore } from '$lib/stores/user.svelte'
+  import { questStore } from '$lib/stores/quests.svelte'
   import Avatar from '$lib/components/ui/Avatar.svelte'
 
   let { children } = $props()
 
-  // Hydrate the demo session from localStorage on first browser tick.
-  // Server renders neutrally (signed-out chrome); the client upgrades.
-  onMount(() => userStore.init())
+  // Hydrate the demo session + seeded/persisted quests on first browser
+  // tick. Server renders neutrally; the client upgrades.
+  onMount(() => {
+    userStore.init()
+    questStore.init()
+  })
 
   const tabs = [
     { href: '/',       label: 'Globe' },

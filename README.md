@@ -6,7 +6,7 @@
 
 **🌐 Live demo →** [mesh-pi-topaz.vercel.app](https://mesh-pi-topaz.vercel.app/)
 
-![Globe with Brunswick selected, showing pillar scores](docs/screenshots/globe.png)
+![Melbourne map with Carlton selected, tilted to 2.5D with 3D building extrusion](docs/screenshots/map-hero.png)
 
 ## What it is
 

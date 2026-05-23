@@ -146,7 +146,7 @@
     { n: '00', title: 'Foundations',           state: 'done',    note: 'SvelteKit scaffold, Vercel deploy, brand bones' },
     { n: '01', title: 'Data pipeline',         state: 'done',    note: 'Open-data wrappers, real-data seed' },
     { n: '02', title: 'Schema & types',        state: 'done',    note: 'Migrations + typed Supabase client (offline)' },
-    { n: '03', title: 'Three.js globe',        state: 'partial', note: 'Live as the home page; polish pending' },
+    { n: '03', title: 'Map (2.5D)',            state: 'done',    note: 'Google Maps WebGL vector + tilt + 3D buildings + 2D/3D toggle' },
     { n: '04', title: 'Auth & profile',        state: 'next',    note: 'Magic link, suburb claim, XP placeholder' },
     { n: '05', title: 'Quests UI',             state: 'partial', note: 'Board live; submission UI in 07' },
     { n: '06', title: 'Quest Generator',       state: 'partial', note: 'Inline endpoint shipped, edge-fn pending' },
@@ -420,6 +420,42 @@
       <span><i class="cov cov-real"></i>real — pulled from a survey or sensor</span>
       <span><i class="cov cov-seifa"></i>seifa — approximated from ABS 2021 IRSD decile</span>
     </div>
+
+    <div class="prov-datasets" use:reveal>
+      <p class="prov-datasets-head">Datasets used</p>
+      <ul>
+        <li>
+          <a href="https://data.melbourne.vic.gov.au/api/explore/v2.1/catalog/datasets/social-indicators-for-city-of-melbourne-residents-2023/information" target="_blank" rel="noopener">
+            social-indicators-for-city-of-melbourne-residents-2023
+          </a>
+          <span>— City of Melbourne resident survey. Feeds food security + emergency preparedness for Carlton.</span>
+        </li>
+        <li>
+          <a href="https://data.melbourne.vic.gov.au/api/explore/v2.1/catalog/datasets/landmarks-and-places-of-interest-including-schools-theatres-health-services-spor/information" target="_blank" rel="noopener">
+            landmarks-and-places-of-interest
+          </a>
+          <span>— spatial filter within 1.5 km of each centroid drives skill density + resource sharing.</span>
+        </li>
+        <li>
+          <a href="https://data.melbourne.vic.gov.au/api/explore/v2.1/catalog/datasets/pedestrian-counting-system-monthly-counts-per-hour/information" target="_blank" rel="noopener">
+            pedestrian-counting-system-monthly-counts-per-hour
+          </a>
+          <span>— hourly counts within radius drive the social-connectivity score.</span>
+        </li>
+        <li>
+          <a href="https://www.abs.gov.au/statistics/people/people-and-communities/socio-economic-indexes-areas-seifa-australia/latest-release" target="_blank" rel="noopener">
+            ABS 2021 SEIFA (IRSD decile)
+          </a>
+          <span>— hand-curated reference values in <code>scripts/seed-suburbs.ts</code>. Used as the fallback for any pillar with no direct signal.</span>
+        </li>
+        <li>
+          <a href="https://nominatim.openstreetmap.org/" target="_blank" rel="noopener">
+            OpenStreetMap via Nominatim
+          </a>
+          <span>— suburb boundary polygons fetched once by <code>pnpm fetch:suburb-geo</code> into <code>src/lib/data/suburb-geometries.json</code>.</span>
+        </li>
+      </ul>
+    </div>
   </section>
 
   <!-- 08 — STACK -->
@@ -431,7 +467,7 @@
 
     <ul class="stack-list" use:reveal>
       <li><span>Frontend</span><strong>SvelteKit 2 + Svelte 5 runes</strong></li>
-      <li><span>Globe</span><strong>Three.js, WebGL2</strong></li>
+      <li><span>Map</span><strong>Google Maps · WebGL vector · 2.5D tilt + 3D buildings</strong></li>
       <li><span>Data</span><strong>Supabase, Postgres 15, PostGIS</strong></li>
       <li><span>Agents</span><strong>Claude Sonnet 4 · pinned model</strong></li>
       <li><span>Deploy</span><strong>Vercel (adapter-vercel)</strong></li>
@@ -1131,6 +1167,50 @@
     flex-wrap: wrap;
   }
   .prov-legend span { display: inline-flex; align-items: center; }
+
+  .prov-datasets {
+    margin-top: 28px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+  }
+  .prov-datasets-head {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+  .prov-datasets ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .prov-datasets li {
+    color: #b9c2d8;
+    font-size: 0.92rem;
+    line-height: 1.45;
+  }
+  .prov-datasets a {
+    font-family: var(--mono);
+    font-size: 0.84rem;
+    color: var(--green);
+    text-decoration: none;
+    border-bottom: 1px dotted color-mix(in oklab, var(--green) 50%, transparent);
+  }
+  .prov-datasets a:hover { color: #b3e3a3; }
+  .prov-datasets li span { color: var(--muted); }
+  .prov-datasets code {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: #ecf1ff;
+  }
 
   /* === Stack === */
   .stack-list {

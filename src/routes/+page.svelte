@@ -5,16 +5,20 @@
   import SuburbDigest  from '$lib/components/suburb/SuburbDigest.svelte'
   import { MOCK_SUBURBS } from '$lib/data/mock-suburbs'
   import { PILLAR_LABELS } from '$lib/types'
+  import { dataSourceFor } from '$lib/data/suburb-data-sources'
 
   let selectedId: string | null = $state(null)
   let hoveredId:  string | null = $state(null)
+  let provenanceOpen: boolean = $state(false)
 
   const suburbs = MOCK_SUBURBS
 
   let selected = $derived(suburbs.find((s) => s.id === selectedId) ?? null)
+  let provenance = $derived(selected ? dataSourceFor(selected.id) : null)
 
   function onSelect(detail: { id: string | null }) {
     selectedId = detail.id
+    provenanceOpen = false      // collapse the tooltip when switching suburbs
   }
   function onHover(detail: { id: string | null }) {
     hoveredId = detail.id
@@ -30,12 +34,44 @@
     {#if selected}
       <div class="detail">
         <div class="detail-top">
-          <h3>{selected.name} <span class="postcode">{selected.postcode}</span></h3>
+          <h3>
+            {selected.name}
+            <span class="postcode">{selected.postcode}</span>
+            {#if provenance}
+              <button
+                class="prov-icon prov-{provenance.level}"
+                aria-label={`Data source: ${provenance.summary}`}
+                title={provenance.summary}
+                onclick={() => (provenanceOpen = !provenanceOpen)}
+                type="button"
+              >i</button>
+            {/if}
+          </h3>
           <div class="r-index-big">
             <span class="label">R-index</span>
             <span class="value">{selected.r_index}</span>
           </div>
         </div>
+
+        {#if provenance && provenanceOpen}
+          <div class="prov-panel" role="region" aria-label="Data source detail">
+            <p class="prov-summary">
+              <span class="prov-chip prov-{provenance.level}">{provenance.level}</span>
+              {provenance.summary}
+            </p>
+            <ul class="prov-datasets">
+              {#each provenance.datasets as ds (ds.label)}
+                <li>
+                  <a href={ds.url} target="_blank" rel="noopener">{ds.label}</a>
+                </li>
+              {/each}
+            </ul>
+            <p class="prov-footnote">
+              Full provenance table on <a href="/pitch#provenance">the pitch page</a>.
+            </p>
+          </div>
+        {/if}
+
         <SuburbDigest suburb={selected} />
 
         <div class="detail-cols">
@@ -167,6 +203,78 @@
     font-variant-numeric: tabular-nums;
     line-height: 1;
   }
+
+  /* === Provenance (i) icon + collapsible panel === */
+  .prov-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-left: 8px;
+    border-radius: 50%;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.72rem;
+    font-style: italic;
+    line-height: 1;
+    border: 1px solid currentColor;
+    background: transparent;
+    cursor: pointer;
+    transition: background 180ms ease;
+    vertical-align: 1px;
+  }
+  .prov-icon.prov-real    { color: #7fc497; }
+  .prov-icon.prov-partial { color: #e8a23e; }
+  .prov-icon.prov-seifa   { color: #aab4cc; }
+  .prov-icon:hover {
+    background: color-mix(in oklab, currentColor 16%, transparent);
+  }
+
+  .prov-panel {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid rgba(139, 182, 255, 0.18);
+    border-radius: 8px;
+    background: rgba(8, 11, 22, 0.6);
+    font-size: 0.78rem;
+    line-height: 1.5;
+  }
+  .prov-summary {
+    margin: 0 0 8px;
+    color: #c9d2e6;
+  }
+  .prov-chip {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-right: 6px;
+    vertical-align: 1px;
+  }
+  .prov-chip.prov-real    { background: rgba(127, 196, 151, 0.18); color: #b3e3a3; }
+  .prov-chip.prov-partial { background: rgba(232, 162, 62, 0.18); color: #f0c47e; }
+  .prov-chip.prov-seifa   { background: rgba(170, 180, 204, 0.14); color: #c9d2e6; }
+  .prov-datasets {
+    margin: 0 0 6px;
+    padding-left: 18px;
+    color: #aab4cc;
+  }
+  .prov-datasets li { margin-bottom: 2px; }
+  .prov-datasets a {
+    color: #8bb6ff;
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(139, 182, 255, 0.4);
+  }
+  .prov-datasets a:hover { color: #c2d8ff; }
+  .prov-footnote {
+    margin: 0;
+    color: #6e7993;
+    font-size: 0.72rem;
+  }
+  .prov-footnote a { color: #8bb6ff; }
 
   .pillars {
     list-style: none;

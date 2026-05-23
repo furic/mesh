@@ -16,17 +16,20 @@ import { browser } from '$app/environment'
 import type { GeneratedQuest } from '$lib/types'
 import { SEEDED_QUESTS } from '$lib/data/seeded-quests'
 
+export type QuestSource = 'seed' | 'ai' | null
+
 interface Slot {
   quest:   GeneratedQuest | null
   loading: boolean
   error:   string | null
+  source:  QuestSource          // 'seed' = hand-curated, 'ai' = Claude
 }
 
 export interface GenerateOpts {
   messages?: { role: 'user' | 'assistant'; content: string }[]
 }
 
-const EMPTY_SLOT: Slot = Object.freeze({ quest: null, loading: false, error: null }) as Slot
+const EMPTY_SLOT: Slot = Object.freeze({ quest: null, loading: false, error: null, source: null }) as Slot
 const LS_KEY = 'mesh.user_quests.v1'
 
 function readPersisted(): Record<string, GeneratedQuest> {
@@ -63,7 +66,7 @@ function createStore() {
 
   function ensure(suburbId: string): Slot {
     if (!slots[suburbId]) {
-      slots[suburbId] = { quest: null, loading: false, error: null }
+      slots[suburbId] = { quest: null, loading: false, error: null, source: null }
     }
     return slots[suburbId]
   }
@@ -76,7 +79,13 @@ function createStore() {
     userGenerated = readPersisted()
     for (const id of new Set([...Object.keys(SEEDED_QUESTS), ...Object.keys(userGenerated)])) {
       const cell = ensure(id)
-      cell.quest = userGenerated[id] ?? SEEDED_QUESTS[id] ?? null
+      if (userGenerated[id]) {
+        cell.quest  = userGenerated[id]
+        cell.source = 'ai'
+      } else if (SEEDED_QUESTS[id]) {
+        cell.quest  = SEEDED_QUESTS[id]
+        cell.source = 'seed'
+      }
     }
   }
 
@@ -96,7 +105,8 @@ function createStore() {
         throw new Error(detail || `HTTP ${res.status}`)
       }
       const data = (await res.json()) as { quest: GeneratedQuest }
-      s.quest = data.quest
+      s.quest  = data.quest
+      s.source = 'ai'
       userGenerated[suburbId] = data.quest
       writePersisted(userGenerated)
       return data.quest
@@ -113,8 +123,9 @@ function createStore() {
     const cell = ensure(suburbId)
     delete userGenerated[suburbId]
     writePersisted(userGenerated)
-    cell.quest = SEEDED_QUESTS[suburbId] ?? null
-    cell.error = null
+    cell.quest  = SEEDED_QUESTS[suburbId] ?? null
+    cell.source = SEEDED_QUESTS[suburbId] ? 'seed' : null
+    cell.error  = null
   }
 
   return {

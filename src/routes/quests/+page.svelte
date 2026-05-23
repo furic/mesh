@@ -21,11 +21,14 @@
 <main>
   <header class="page-head">
     <div>
-      <span class="eyebrow">Quest board · AI generated</span>
+      <span class="eyebrow">Quest board · seeded + AI generated</span>
       <h1>Community quests</h1>
       <p class="lede">
-        Claude reads each suburb's pillar scores and proposes one concrete,
-        achievable initiative — targeting whichever pillar is weakest.
+        Cards marked <span class="inline-chip seed">EXAMPLE</span> are hand-curated
+        starters so the board isn't empty on first load. Hit <em>Regenerate with Claude</em> on
+        any of them and the agent reads that suburb's pillar scores and proposes a
+        real AI-generated initiative — targeting whichever pillar is weakest. Real
+        AI quests are marked <span class="inline-chip ai">AI</span> and survive a refresh.
       </p>
     </div>
     <button class="generate-all" onclick={generateAll} disabled={allLoading || allDone}>
@@ -47,6 +50,7 @@
         quest={s.quest}
         loading={s.loading}
         error={s.error}
+        source={s.source}
         onGenerate={() => questStore.generate(suburb.id)}
       />
     {/each}
@@ -88,7 +92,29 @@
     color: #aab4cc;
     font-size: 0.92rem;
     line-height: 1.55;
-    max-width: 540px;
+    max-width: 640px;
+  }
+  .lede em { color: #c2d8ff; font-style: italic; }
+  .inline-chip {
+    display: inline-block;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.14em;
+    padding: 1px 6px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    margin: 0 2px;
+    vertical-align: 1px;
+  }
+  .inline-chip.seed {
+    color: #aab4cc;
+    background: rgba(170, 180, 204, 0.12);
+    border-color: rgba(170, 180, 204, 0.2);
+  }
+  .inline-chip.ai {
+    color: #b3e3a3;
+    background: rgba(127, 196, 151, 0.15);
+    border-color: rgba(127, 196, 151, 0.3);
   }
 
   .generate-all {

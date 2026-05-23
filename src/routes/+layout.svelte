@@ -7,6 +7,7 @@
   const tabs = [
     { href: '/',       label: 'Globe' },
     { href: '/quests', label: 'Quests' },
+    { href: '/pitch',  label: 'Pitch' },
   ]
 </script>
 

@@ -99,6 +99,7 @@ function createStore() {
     get user()            { return s.user; },
     get profile()         { return s.profile; },
     get isAuthenticated() { return s.profile !== null; },
+    get isAdmin()         { return s.profile?.is_admin === true; },
     init,
     setFromServer,
     setProfile,

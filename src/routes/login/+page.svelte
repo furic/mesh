@@ -119,11 +119,14 @@
     <ul class="persona-grid">
       {#each DEMO_PERSONAS as p (p.profile.id)}
         <li>
-          <button class="persona-card" onclick={() => signInAs(p)} aria-label={`Sign in as ${p.profile.display_name}`}>
+          <button class="persona-card" class:is-admin={p.profile.is_admin} onclick={() => signInAs(p)} aria-label={`Sign in as ${p.profile.display_name}`}>
             <header>
               <Avatar name={p.profile.display_name ?? '·'} size="lg" />
               <div class="who">
-                <span class="name">{p.profile.display_name}</span>
+                <span class="name">
+                  {p.profile.display_name}
+                  {#if p.profile.is_admin}<span class="admin-chip">ADMIN</span>{/if}
+                </span>
                 <span class="suburb">{suburbName(p.profile.suburb_id ?? '')} · joined {timeSince(p.joined)}</span>
               </div>
             </header>
@@ -363,6 +366,26 @@
     border-color: rgba(127, 196, 151, 0.5);
     background: rgba(127, 196, 151, 0.05);
     transform: translateY(-2px);
+  }
+  .persona-card.is-admin {
+    border-color: rgba(232, 162, 62, 0.35);
+    background: rgba(232, 162, 62, 0.04);
+  }
+  .persona-card.is-admin:hover {
+    border-color: rgba(232, 162, 62, 0.55);
+    background: rgba(232, 162, 62, 0.08);
+  }
+  .admin-chip {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.14em;
+    padding: 2px 7px;
+    border-radius: 999px;
+    color: #f0c47e;
+    background: rgba(232, 162, 62, 0.15);
+    border: 1px solid rgba(232, 162, 62, 0.3);
+    margin-left: 8px;
+    vertical-align: 2px;
   }
   .persona-card header {
     display: flex;

@@ -84,6 +84,7 @@ type ProfileRow = {
   xp_total:      number;
   level:         number;
   badges:        string[];
+  is_admin:      boolean;
   created_at:    string;
 }
 
@@ -95,6 +96,7 @@ type ProfileInsert = {
   xp_total?:     number;
   level?:        number;
   badges?:       string[];
+  is_admin?:     boolean;
   created_at?:   string;
 }
 

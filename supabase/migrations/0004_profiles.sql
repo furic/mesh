@@ -9,6 +9,7 @@ create table if not exists profiles (
   xp_total      bigint default 0,
   level         int default 1,
   badges        text[] default '{}',
+  is_admin      boolean not null default false,        -- grants /admin access
   created_at    timestamptz default now()
 );
 

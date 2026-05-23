@@ -16,9 +16,10 @@
   })
 
   const tabs = [
-    { href: '/',       label: 'Globe' },
+    { href: '/',       label: 'Map' },
     { href: '/quests', label: 'Quests' },
     { href: '/pitch',  label: 'Pitch' },
+    { href: '/admin',  label: 'Admin' },
   ]
 
   let profile = $derived(userStore.profile)

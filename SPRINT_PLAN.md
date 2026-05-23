@@ -204,14 +204,14 @@ Post "I have 10kg zucchini" → Claude surfaces 2 matching needs → mesh edge g
 **Goal**: Weekly suburb digest emails + live initiative advisor chat.
 
 ### Tasks
-- [ ] Build `src/lib/agents/suburb-narrator.ts` — weekly digest generator
-- [ ] Edge Function: `narrate-suburbs` — pg_cron every Monday 8am
+- [x] Build the Suburb Narrator agent — inlined in `src/routes/api/agents/narrator/+server.ts`, returns plain text + score deltas. The `src/lib/agents/suburb-narrator.ts` design stub awaits wiring.
+- [ ] Edge Function: `narrate-suburbs` — pg_cron every Monday 8am (needs Supabase + pg_cron)
 - [x] Suburb detail panel — pillar-score breakdown in the home page's detail card (deferred dedicated `/suburb/[id]` route)
 - [ ] Recent activity feed
 - [x] Build the Initiative Advisor agent — inlined in `src/routes/api/agents/advisor/+server.ts` (streaming SSE pass-through)
 - [x] `src/lib/components/suburb/AdvisorChat.svelte` — chat UI with streaming, blinking caret while assistant streams
 - [x] Inject suburb context (name, r_index, weakest pillar + score, SEIFA, population) into system prompt
-- [ ] "Create quest from this conversation" button → calls Quest Generator
+- [x] "Create quest from this conversation" button → calls Quest Generator with the chat transcript as context; result appears on `/quests` via a shared reactive store
 
 ### Deliverable
 Suburb page shows weekly narrative. Chat advisor gives grounded local advice.

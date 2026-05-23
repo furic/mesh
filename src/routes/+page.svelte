@@ -1,7 +1,8 @@
 <script lang="ts">
-  import MeshGlobe    from '$lib/components/globe/MeshGlobe.svelte'
-  import SuburbList   from '$lib/components/suburb/SuburbList.svelte'
-  import AdvisorChat  from '$lib/components/suburb/AdvisorChat.svelte'
+  import MeshGlobe     from '$lib/components/globe/MeshGlobe.svelte'
+  import SuburbList    from '$lib/components/suburb/SuburbList.svelte'
+  import AdvisorChat   from '$lib/components/suburb/AdvisorChat.svelte'
+  import SuburbDigest  from '$lib/components/suburb/SuburbDigest.svelte'
   import { MOCK_SUBURBS } from '$lib/data/mock-suburbs'
   import { PILLAR_LABELS } from '$lib/types'
 
@@ -35,6 +36,8 @@
             <span class="value">{selected.r_index}</span>
           </div>
         </div>
+        <SuburbDigest suburb={selected} />
+
         <div class="detail-cols">
           <ul class="pillars">
             {#each Object.entries(selected.scores) as [key, score] (key)}
@@ -124,6 +127,7 @@
     grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.1fr);
     gap: 18px;
     align-items: stretch;
+    margin-top: 14px;
   }
   .detail-top {
     display: flex;

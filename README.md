@@ -1,6 +1,8 @@
-# MESH — Melbourne Resilience Network
+# MESH — Melbourne Exchange & Solidarity Hub
 
 > A gamified civic platform where Melbourne residents discover local resources, complete community quests, and collectively build suburb-level resilience — powered by Victorian open data and AI agents.
+>
+> The name reads as the visualisation itself: a **mesh** of suburbs, an **exchange** of skills and tools, and the **solidarity** that turns a network into a community.
 
 ![Globe with Brunswick selected, showing pillar scores](docs/screenshots/globe.png)
 

@@ -10,50 +10,61 @@
 
 ## What it is
 
-Melbourne is a network of **suburbs**, each carrying a **resilience index** (R-index) derived from five pillars — food security, skill density, resource sharing, social connectivity, and emergency preparedness. MESH visualises that network as a living 3D mesh, lets residents pick their suburb, and runs **six AI agents** that read the data and respond:
+Melbourne is a network of **suburbs**, each carrying a **resilience index** (R-index) derived from five pillars — food security, skill density, resource sharing, social connectivity, and emergency preparedness. MESH renders that network on a real 2.5D map of inner Melbourne (with optional 3D building extrusion), lets residents pick their suburb, and runs **six AI agents** that read the data and respond:
 
 | Agent | Role | Status |
 |---|---|---|
 | **Quest Generator** | Reads suburb data → proposes one concrete, achievable community initiative targeting the weakest pillar | ✅ wired end-to-end |
 | **Initiative Advisor** | Streaming chat — grounded in the selected suburb's context | ✅ wired end-to-end |
+| **Suburb Narrator** | Weekly plain-English suburb digest | ✅ wired end-to-end |
 | Submission Verifier | Reviews quest evidence (text + photo), awards XP | design only |
 | Resource Matchmaker | Pairs "offer" + "need" posts across suburbs | design only |
-| Suburb Narrator | Weekly plain-English suburb digest | design only |
 | Anomaly Watcher | Watches open-data diffs, spawns reactive quests/alerts | design only |
 
 Full agent specs in [AGENTS.md](AGENTS.md).
 
 ## What's visible today
 
-This repo is partway through Sprint 0 of the [10-sprint plan](SPRINT_PLAN.md). The frontend, two AI agents, and a mock dataset of five inner-Melbourne suburbs are live; Supabase and the Victorian open-data pipeline are not yet wired.
+The frontend, three AI agents, real open-data-derived suburb scores, a demo auth + profile flow, a long-form pitch page, and five inner-Melbourne suburbs rendered on a real Google Maps basemap are live. Supabase migrations are written and the typed client is wired offline; provisioning + DB-backed reads land next.
 
-**At `/`** — the globe. Five suburbs projected by lat/lng, coloured by R-index, with click/hover synced to a sidebar. Selecting one opens a detail card with pillar scores plus a live **advisor chat** that streams Claude responses contextualised to that suburb.
+**At `/`** — the map. Real Melbourne basemap with five suburb polygons (OSM boundaries) colour-coded by R-index. Sidebar selection or a polygon click flies the camera in, tilts to 2.5D, and reveals 3D building extrusion in the CBD via Google Maps' WebGL vector renderer. The top-r_index suburb has a permanent pulsing golden ring; every selection fires a screen-projected burst animation. The detail card shows pillar scores plus a live **advisor chat** that streams Claude responses contextualised to that suburb.
 
-![Streaming advisor chat](docs/screenshots/advisor-chat.png)
+**At `/quests`** — the quest board. Five hand-curated seed quests (one per suburb, each targeting its weakest pillar) load on first paint. Per-suburb "Generate quest" buttons replace the seed with a fresh Claude-generated quest; the generated ones persist to localStorage so they survive a refresh. Quests generated from the advisor chat appear here too — the two surfaces share state.
 
-**At `/quests`** — the quest board. Per-suburb "Generate quest" buttons call Claude, which reads the suburb's pillar scores and returns a structured JSON quest (title, pillar, difficulty, steps, XP). Quests generated from the advisor chat appear here too — the two surfaces share state.
+**At `/pitch`** — the long-form pitch. Editorial scroll-paced narrative covering vision → pillars → loop → agents → game layer → honest data provenance → stack → roadmap. Real screenshots from the prototype embedded as field reports.
 
-![Quest board with one AI-generated quest](docs/screenshots/quest-board.png)
+**At `/login` + `/app/profile`** — demo auth. Pick a preset persona (Maya/Carlton, Tom/Brunswick, Sofia/Footscray) or "play yourself" with a custom name + suburb. Profile shows level + XP bar + badges grid + recent activity + an inline-edit settings strip. Session persists in localStorage; the magic-link form is rendered but disabled until Supabase is provisioned.
 
 ## Stack
 
 | Layer | Tech |
 |---|---|
 | Frontend | SvelteKit 2 + Svelte 5 (runes mode) + TypeScript |
-| 3D Scene | Three.js (`r184`) |
+| Map | Google Maps Platform — WebGL vector renderer with Map ID, tilt + 3D buildings |
 | AI Agents | Anthropic Claude (`claude-sonnet-4-20250514`) — streaming SSE + JSON modes |
-| Hosting | Vercel (planned) |
-| Database | Supabase PostgreSQL + PostGIS (planned, Sprint 2) |
+| Hosting | Vercel — auto-deploy on `main` |
+| Database | Supabase PostgreSQL + PostGIS — migrations + typed client offline; DB not yet provisioned |
 | Edge Functions | Supabase / Deno (planned, Sprint 6+) |
-| Open data | data.vic.gov.au (CKAN) + data.melbourne.vic.gov.au (OpenDataSoft) — planned, Sprint 1 |
+| Open data | data.melbourne.vic.gov.au (OpenDataSoft v2.1, anonymous) — seed-driven; live sync planned |
+| Suburb boundaries | OpenStreetMap via Nominatim (one-time fetch into `src/lib/data/suburb-geometries.json`) |
 
 ## Quick start
 
 ```bash
 pnpm install
-cp .env.example .env.local        # paste your ANTHROPIC_API_KEY in
+cp .env.example .env.local        # see below for which keys you need
 pnpm dev                          # http://localhost:5173
 ```
+
+### Required env vars
+
+| Var | Required for | How to get it |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | All AI surfaces (advisor chat, quest generator, narrator) | [console.anthropic.com](https://console.anthropic.com) → API Keys |
+| `PUBLIC_GOOGLE_MAPS_API_KEY` | Home page map | [console.cloud.google.com](https://console.cloud.google.com) → enable Maps JavaScript API → Credentials → API key. Restrict to your domains. |
+| `PUBLIC_GOOGLE_MAPS_MAP_ID` | Map ID with **Tilt + Rotation** enabled — required for the 2.5D vector renderer + 3D buildings | Google Maps Platform → Map Management → Create Map ID (type: JavaScript) |
+
+Without the Google Maps keys, `/` renders a setup card with the same instructions inline. The Supabase + Victorian-open-data keys in `.env.example` are placeholders until those sprints land.
 
 ### Deploy to Vercel
 
@@ -61,12 +72,10 @@ The repo ships with `@sveltejs/adapter-vercel`. To deploy:
 
 1. Open [vercel.com/new](https://vercel.com/new) and **Import** the `furic/mesh` repo.
 2. Framework is auto-detected as **SvelteKit**; build command is `pnpm build`, output dir is `.svelte-kit/output`.
-3. Under **Environment Variables**, add `ANTHROPIC_API_KEY` with your Anthropic key — required for all three AI surfaces.
+3. Under **Environment Variables**, add `ANTHROPIC_API_KEY`, `PUBLIC_GOOGLE_MAPS_API_KEY`, and `PUBLIC_GOOGLE_MAPS_MAP_ID`.
 4. Click **Deploy**.
 
 After the first deploy, every push to `main` deploys automatically. Preview deploys are generated for every branch/PR.
-
-Only `ANTHROPIC_API_KEY` is needed for the live AI surfaces today. The Supabase and Victorian-open-data keys are placeholders until Sprints 1–2 land.
 
 ```bash
 pnpm check                        # svelte-kit sync + svelte-check (typecheck)
@@ -78,20 +87,35 @@ pnpm preview                      # serve the built app
 
 ```
 src/
+├── hooks.server.ts    # per-request typed SupabaseClient (with stub fallback)
 ├── lib/
-│   ├── agents/        # callClaude wrapper + 5 design-spec stubs (design docs, not yet imported)
-│   ├── components/    # MeshGlobe (Three.js), SuburbList, AdvisorChat, QuestCard
-│   ├── data/          # MOCK_SUBURBS — five Melbourne suburbs
-│   ├── stores/        # quests.svelte.ts — shared reactive store between chat + board
-│   └── types/         # Suburb, QuestPillar, GeneratedQuest
-└── routes/
-    ├── +page.svelte   # / — globe + sidebar + suburb detail
-    ├── quests/        # /quests — AI quest board
-    └── api/
-        ├── agents/advisor/ # POST → streams Claude SSE through to the browser
-        └── quests/         # POST → returns one JSON quest
+│   ├── agents/        # callClaude wrapper + agent design stubs
+│   ├── components/
+│   │   ├── map/       # MeshMap.svelte — Google Maps 2.5D + polygons + pulse + burst
+│   │   ├── suburb/    # SuburbList, AdvisorChat, SuburbDigest
+│   │   ├── quest/     # QuestCard
+│   │   └── ui/        # Avatar, XPBar, Badge, SuburbPicker
+│   ├── data/          # mock-suburbs (real-data-seeded), seeded-quests, personas,
+│   │                  # badges, suburb-geometries (OSM boundary GeoJSON)
+│   ├── stores/        # user / suburb / quests Svelte 5 runes stores
+│   ├── types/         # Suburb domain types + hand-typed Supabase Database
+│   └── utils/         # vic-data, melb-data, xp math
+├── routes/
+│   ├── +page.svelte           # / — map + sidebar + suburb detail + advisor chat
+│   ├── quests/                # /quests — AI quest board
+│   ├── pitch/                 # /pitch — long-form editorial pitch page
+│   ├── login/                 # /login — demo persona picker + magic-link shell
+│   ├── app/profile/           # /app/profile — XP, badges, activity, settings
+│   └── api/
+│       ├── agents/advisor/    # POST → streams Claude SSE
+│       ├── agents/narrator/   # POST → suburb digest
+│       └── quests/            # POST → returns one JSON quest
 
-supabase/functions/      # Deno edge-function stubs (not yet running)
+scripts/                       # seed-suburbs, fetch-suburb-geo (one-time data pulls)
+supabase/migrations/           # 13 SQL files: extensions, suburbs, profiles, quests,
+                               # participants, submissions, resources, matches,
+                               # narratives, snapshots, xp_ledger, views
+supabase/functions/            # Deno edge-function stubs (not yet running)
 ```
 
 ## Docs
@@ -106,10 +130,14 @@ supabase/functions/      # Deno edge-function stubs (not yet running)
 
 Use [SPRINT_PLAN.md](SPRINT_PLAN.md) for the authoritative checklist. Headline progress:
 
-- Sprint 0 — scaffold, env, repo: **in progress** (no Vercel yet)
-- Sprint 1 — Victorian open-data pipeline: pending
-- Sprint 2 — Supabase schema + RLS: pending
-- Sprint 3 — Three.js globe: **partial** (camera/orbit + nodes done; particle edges, GSAP fly-in, day/night cycle pending)
-- Sprint 5 — quest board UI: **partial** (board + cards live; filtering / join-quest pending)
-- Sprint 6 — Quest Generator agent: **partial** (endpoint live; dedup + DB upsert + admin UI pending)
-- Sprint 9 — Initiative Advisor: **partial** (streaming chat live; suburb-narrator pending)
+- Sprint 0 — scaffold, env, Vercel auto-deploy: **done**
+- Sprint 1 — Victorian open-data pipeline: **done (within current infra)**; `pnpm seed:suburbs` hydrates `mock-suburbs.ts` from real Melbourne open data with honest provenance per suburb
+- Sprint 2 — Supabase schema + RLS: **done offline**; 13 migrations + hand-typed `Database` generic for `SupabaseClient<Database>` + `hooks.server.ts` with typed-Proxy fallback. Awaits one user action (provisioning the Supabase project) to go live.
+- Sprint 3 — Map: **2.5D map live** (Google Maps WebGL vector renderer with tilt + 3D buildings, real OSM suburb polygons, top-suburb pulse, selection burst). Particle flow + XP-burst on level-up still pending.
+- Sprint 4 — Auth & profile: **demo mode live** (persona picker → /app/profile with XP, badges, activity). Real magic-link auth gated on Supabase provisioning.
+- Sprint 5 — Quest board UI: **partial** (board + cards live, seed quests + persistence done; submission form pending in Sprint 7)
+- Sprint 6 — Quest Generator agent: **partial** (endpoint live; DB upsert + dedup + admin UI pending)
+- Sprint 7 — Submission Verifier: pending
+- Sprint 8 — Resource Matchmaker + Exchange UI: pending
+- Sprint 9 — Narrator + Advisor: **partial** (both agents live; weekly cron + dedicated suburb route pending)
+- Sprint 10 — Polish + Anomaly Watcher + onboarding: pending

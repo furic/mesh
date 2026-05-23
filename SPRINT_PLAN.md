@@ -90,24 +90,28 @@ GET https://discover.data.vic.gov.au/api/3/action/datastore_search?resource_id=<
 
 ---
 
-## Sprint 3 — Three.js Globe (Week 3)
+## Sprint 3 — Map (Week 3)
 
-**Goal**: The money shot. Melbourne as a living 3D mesh.
+**Goal**: The money shot. Melbourne as a living 2.5D map.
+
+> **Pivot note.** Originally scoped as a Three.js abstract globe (and shipped that way in v1). After feedback that an abstract scene felt detached from the place it represented, we tried a 2D MapLibre version with real OSM polygons, then switched to **Google Maps Platform's WebGL vector renderer** so the basemap tilts together with 3D building extrusion — no floating-prism mismatch. The Three.js component is git-deleted; `maplibre-gl` is removed from deps. The implementation lives at `src/lib/components/map/MeshMap.svelte`.
 
 ### Tasks
-- [x] Install Three.js — `three@0.184` installed (GSAP not yet)
-- [x] Build `src/lib/components/globe/MeshGlobe.svelte` — the main scene
-- [x] Load suburb centroids as spheres — currently 5 mock lat/lng (real GeoJSON deferred to Sprint 1)
-- [x] Color-code nodes by resilience score (green → amber → red) — HSL-mapped to r_index
-- [ ] Add `OrbitControls`, constrained to Melbourne bounds — auto-orbit camera is in; OrbitControls not yet
-- [ ] Animate mesh edges: `TubeGeometry` + particle flow between active suburbs — currently flat `THREE.Line` edges weighted by combined resilience
-- [x] Click handler: select suburb → emit `select` event — sidebar + detail panel synced (no GSAP fly-in yet)
-- [x] Hover: node halo glow, suburb selection synced to sidebar
-- [ ] Day/night ambient light cycle (60s loop)
-- [ ] `InstancedMesh` XP burst particle effect on level-up event
+- [x] Pull real OSM suburb boundary polygons via `scripts/fetch-suburb-geo.ts` (Nominatim) → `src/lib/data/suburb-geometries.json`
+- [x] Render the 5 demo suburbs as colour-coded polygons over a real basemap
+- [x] Click polygon + click sidebar row → smooth `panTo` + `setZoom`
+- [x] Hover: polygon thickens stroke + raises opacity, syncs to sidebar
+- [x] Tilt to 2.5D (pitch 67.5°) + heading 20° on selection; reset to flat top-down on deselect — requires a Google Maps **Map ID with Tilt + Rotation enabled** to actually tilt (see README env-var table)
+- [x] 3D building extrusion in CBD + inner suburbs — native to the Google Maps WebGL vector basemap once tilt > 0
+- [x] Permanent pulsing golden ring around the highest-r_index suburb (RAF-driven `google.maps.Circle`)
+- [x] Selection burst overlay — expanding CSS double-ring at the projected centroid each time a suburb is selected
+- [x] Setup-card fallback rendered on `/` when `PUBLIC_GOOGLE_MAPS_API_KEY` / `PUBLIC_GOOGLE_MAPS_MAP_ID` are missing — keeps the prototype demoable before the keys are pasted
+- [ ] Animate inter-suburb mesh edges with flowing particles (TubeGeometry-equivalent in Google Maps — likely via a custom WebGL overlay or animated `Polyline` segments)
+- [ ] XP-burst particle effect when the resident's profile crosses a level threshold
+- [ ] Day/night ambient cycle — feasible by swapping the Map ID's daytime/nighttime theme on a 60s loop, but lower priority than the agent loop
 
 ### Deliverable
-Full-screen globe renders Melbourne suburbs, click flies into suburb, mobile-responsive.
+Full-screen real Melbourne map renders the 5 demo suburbs as colour-coded polygons. Selection flies the camera in, tilts to 2.5D, and reveals CBD building extrusion. Top suburb pulses; selections fire a screen burst. ✅ Live (gated on the two `PUBLIC_GOOGLE_MAPS_*` env vars; the setup-card guides you through the ~10-minute first-time setup).
 
 ---
 
@@ -116,15 +120,19 @@ Full-screen globe renders Melbourne suburbs, click flies into suburb, mobile-res
 **Goal**: Residents can sign up, claim their suburb, see their XP.
 
 ### Tasks
-- [ ] Supabase Auth: magic link + Google OAuth
-- [ ] `src/routes/login/+page.svelte` — clean auth page
-- [ ] `src/routes/app/profile/+page.svelte` — XP, level, suburb, badges
-- [ ] On signup: resident selects their suburb → stored in `profiles` table
-- [ ] Suburb store: reactive Svelte store tied to auth session
-- [ ] `src/lib/components/ui/XPBar.svelte` — animated XP progress bar
+- [ ] Supabase Auth: magic link + Google OAuth — **deferred until Supabase is provisioned**. The magic-link form is rendered on `/login` and activates automatically once `PUBLIC_SUPABASE_URL` + `PUBLIC_SUPABASE_ANON_KEY` are set; until then it's disabled with an inline note.
+- [x] `src/routes/login/+page.svelte` — editorial login page with magic-link form (disabled until Supabase), three demo personas (Maya/Carlton, Tom/Brunswick, Sofia/Footscray), and a "play yourself" custom form.
+- [x] `src/routes/app/profile/+page.svelte` — avatar + inline-editable name + suburb pill + level chip, XP card with "Level N → N+1" progress, 4-card stats grid, badges grid with descriptions, mock activity feed, settings strip with sign-out. Client-side auth guard bounces to `/login` when no session.
+- [x] On signup: resident selects their suburb → stored in `profile.suburb_id`. Persona picker on `/login` plus a `SuburbPicker` radio-card component in `src/lib/components/ui/`.
+- [x] Suburb store: reactive Svelte store tied to "auth" session — `src/lib/stores/suburb.svelte.ts` exposes current + all, with `loadFromDb()` ready for when Supabase comes online.
+- [x] `src/lib/components/ui/XPBar.svelte` — animated progress bar with shimmer + level/xp labels.
+
+### Deferred until Supabase is provisioned
+- Real magic-link / Google OAuth round-trip (form is built and disabled-gated)
+- `hooks.server.ts.safeGetUser` → `+layout.server.ts` → `userStore.setFromServer()` wiring (the store accepts this shape today)
 
 ### Deliverable
-End-to-end: sign up → claim suburb → see profile with XP = 0.
+~~Sign up → claim suburb → see profile with XP = 0.~~ Revised: pick a persona (or play yourself) → land on `/app/profile` with avatar, XP bar, badges, activity feed, settings. Demo session persists in localStorage. Real magic-link is one Supabase-provisioning step away.
 
 ---
 

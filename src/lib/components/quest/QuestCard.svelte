@@ -45,6 +45,15 @@
   </header>
 
   {#if quest}
+    {#if quest.data_snapshot}
+      <p class="targeting" title="The lowest of the suburb's 5 pillar scores at generation time. The Quest Generator agent is prompted to target the weakest pillar.">
+        <span class="targeting-label">SIGNAL</span>
+        Claude targeted <strong>{quest.data_snapshot.weakest_pillar.replace(/_/g, ' ')}</strong>
+        because {quest.data_snapshot.suburb_name} scored
+        <strong class="weak-score">{quest.data_snapshot.weakest_score}/100</strong>
+        — the lowest of its five pillars.
+      </p>
+    {/if}
     <p class="description">{quest.description}</p>
 
     <ol class="steps">
@@ -59,8 +68,47 @@
     <footer class="meta">
       <span><strong>{quest.participant_target}</strong> residents · expires in <strong>{quest.expires_days}d</strong></span>
       <details>
-        <summary>{source === 'seed' ? 'Why this example?' : 'Why this quest?'}</summary>
-        <p>{quest.ai_rationale}</p>
+        <summary>{source === 'seed' ? 'Why this example?' : 'How this was created'}</summary>
+        <p class="rationale">{quest.ai_rationale}</p>
+
+        {#if quest.data_snapshot && quest.model}
+          <dl class="meta-grid">
+            <dt>Model</dt>
+            <dd><code>{quest.model}</code></dd>
+
+            <dt>Generated</dt>
+            <dd>{new Date(quest.generated_at ?? Date.now()).toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</dd>
+
+            <dt>Inputs Claude saw</dt>
+            <dd>
+              {quest.data_snapshot.suburb_name} · SEIFA {quest.data_snapshot.seifa_score}/10 ·
+              pop {quest.data_snapshot.population.toLocaleString('en-AU')} ·
+              season {quest.data_snapshot.season}
+            </dd>
+
+            <dt>Weakest pillar (targeted)</dt>
+            <dd>
+              {quest.data_snapshot.weakest_pillar.replace(/_/g, ' ')}
+              <span class="weakest-score">{quest.data_snapshot.weakest_score}/100</span>
+            </dd>
+
+            <dt>Pillar scores at generation</dt>
+            <dd class="pillar-row">
+              <span title="food security">F {quest.data_snapshot.pillar_scores.food}</span>
+              <span title="skill density">S {quest.data_snapshot.pillar_scores.skills}</span>
+              <span title="resource sharing">R {quest.data_snapshot.pillar_scores.resources}</span>
+              <span title="social connectivity">C {quest.data_snapshot.pillar_scores.social}</span>
+              <span title="emergency preparedness">E {quest.data_snapshot.pillar_scores.emergency}</span>
+            </dd>
+          </dl>
+          <p class="meta-link">
+            <a href="/pitch#provenance">Where did the inputs come from? See the datasets →</a>
+          </p>
+        {:else if source === 'seed'}
+          <p class="meta-link">
+            <a href="/pitch#provenance">Hand-curated example. See the datasets behind {suburb.name}'s scores →</a>
+          </p>
+        {/if}
       </details>
       {#if source === 'seed'}
         <button class="cta regen" onclick={onGenerate} disabled={loading} type="button">
@@ -178,6 +226,37 @@
   .badge.diff-medium { background: rgba(230, 184, 96, 0.14); color: #e6b860; }
   .badge.diff-hard   { background: rgba(229, 115, 115, 0.12); color: #e57373; }
 
+  .targeting {
+    margin: 0 0 4px;
+    padding: 8px 10px;
+    background: rgba(232, 162, 62, 0.06);
+    border-left: 2px solid rgba(232, 162, 62, 0.6);
+    border-radius: 4px;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: #d4dbf0;
+    cursor: help;
+  }
+  .targeting-label {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.18em;
+    color: #e8a23e;
+    margin-right: 8px;
+    vertical-align: 1px;
+  }
+  .targeting strong {
+    color: #ecf1ff;
+    font-weight: 600;
+    text-transform: capitalize;
+  }
+  .targeting .weak-score {
+    color: #e8a23e;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-weight: 600;
+    text-transform: none;
+  }
+
   .description {
     margin: 0;
     font-size: 0.88rem;
@@ -243,6 +322,70 @@
     line-height: 1.5;
     font-size: 0.78rem;
   }
+  .rationale {
+    color: #c2d0e6;
+    font-style: italic;
+  }
+
+  .meta-grid {
+    margin: 10px 0 0;
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: 14px;
+    row-gap: 6px;
+    font-size: 0.74rem;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(139, 182, 255, 0.10);
+  }
+  .meta-grid dt {
+    color: #6e7993;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .meta-grid dd {
+    color: #c2d0e6;
+    margin: 0;
+  }
+  .meta-grid code {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.72rem;
+    color: #b3e3a3;
+    background: rgba(127, 196, 151, 0.10);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .weakest-score {
+    color: #e8a23e;
+    font-weight: 600;
+    margin-left: 4px;
+  }
+  .pillar-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.7rem;
+  }
+  .pillar-row span {
+    padding: 2px 7px;
+    background: rgba(139, 182, 255, 0.10);
+    color: #c2d8ff;
+    border-radius: 4px;
+  }
+  .meta-link {
+    margin: 10px 0 0 !important;
+    font-size: 0.76rem;
+  }
+  .meta-link a {
+    color: #8bb6ff;
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(139, 182, 255, 0.4);
+  }
+  .meta-link a:hover { color: #c2d8ff; }
 
   .hint, .error {
     margin: 0;

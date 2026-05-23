@@ -5,8 +5,10 @@
 import { error, json } from '@sveltejs/kit'
 import { env } from '$env/dynamic/private'
 import type { RequestHandler } from './$types'
-import type { GeneratedQuest, QuestPillar, Suburb } from '$lib/types'
+import type { GeneratedQuest, QuestDataSnapshot, QuestPillar, Suburb } from '$lib/types'
 import { MOCK_SUBURBS } from '$lib/data/mock-suburbs'
+
+const MODEL = 'claude-sonnet-4-20250514'
 
 interface GenerateRequest {
   suburb_id: string
@@ -112,7 +114,7 @@ Generate the most impactful quest for this suburb right now.
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model:      'claude-sonnet-4-20250514',
+      model:      MODEL,
       max_tokens: 900,
       system:     systemPrompt,
       messages:   [{ role: 'user', content: userContent }],
@@ -136,6 +138,22 @@ Generate the most impactful quest for this suburb right now.
   } catch {
     error(502, `Could not parse quest JSON. Raw: ${text.slice(0, 240)}`)
   }
+
+  // Bundle the generation metadata onto the quest so the UI can show
+  // 'How this was created' transparently — what the model saw, when, etc.
+  const dataSnapshot: QuestDataSnapshot = {
+    suburb_name:    suburb.name,
+    postcode:       suburb.postcode,
+    seifa_score:    suburb.seifa_score,
+    population:     suburb.population,
+    season:         currentSeason(),
+    pillar_scores:  suburb.scores,
+    weakest_pillar: weakestPillar,
+    weakest_score:  weakest[1],
+  }
+  quest.data_snapshot = dataSnapshot
+  quest.model         = MODEL
+  quest.generated_at  = new Date().toISOString()
 
   return json({ quest })
 }

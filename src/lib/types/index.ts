@@ -47,6 +47,20 @@ export interface QuestStep {
   description: string
 }
 
+// Snapshot of the inputs the Quest Generator saw at generation time. Optional
+// because seeded starter quests don't carry one. Persists with the quest in
+// localStorage so the "how was this created" panel survives a refresh.
+export interface QuestDataSnapshot {
+  suburb_name:    string
+  postcode:       string
+  seifa_score:    number
+  population:     number
+  season:         'summer' | 'autumn' | 'winter' | 'spring'
+  pillar_scores:  PillarScores
+  weakest_pillar: QuestPillar
+  weakest_score:  number
+}
+
 export interface GeneratedQuest {
   title:              string
   description:        string
@@ -57,6 +71,10 @@ export interface GeneratedQuest {
   participant_target: number
   ai_rationale:       string
   expires_days:       number
+  // ── Optional generation metadata (set by /api/quests; not on seeded starters) ──
+  data_snapshot?:     QuestDataSnapshot
+  model?:             string
+  generated_at?:      string          // ISO timestamp
 }
 
 // Persisted DB row shapes — re-exported from the hand-typed db.ts so that

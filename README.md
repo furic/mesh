@@ -53,6 +53,17 @@ cp .env.example .env.local        # paste your ANTHROPIC_API_KEY in
 pnpm dev                          # http://localhost:5173
 ```
 
+### Deploy to Vercel
+
+The repo ships with `@sveltejs/adapter-vercel`. To deploy:
+
+1. Open [vercel.com/new](https://vercel.com/new) and **Import** the `furic/mesh` repo.
+2. Framework is auto-detected as **SvelteKit**; build command is `pnpm build`, output dir is `.svelte-kit/output`.
+3. Under **Environment Variables**, add `ANTHROPIC_API_KEY` with your Anthropic key — required for all three AI surfaces.
+4. Click **Deploy**.
+
+After the first deploy, every push to `main` deploys automatically. Preview deploys are generated for every branch/PR.
+
 Only `ANTHROPIC_API_KEY` is needed for the live AI surfaces today. The Supabase and Victorian-open-data keys are placeholders until Sprints 1–2 land.
 
 ```bash

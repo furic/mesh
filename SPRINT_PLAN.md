@@ -17,7 +17,7 @@ Each sprint has a concrete deliverable you can demo.
 - [ ] Set up ESLint + Prettier
 - [ ] Create Supabase project, enable PostGIS extension
 - [x] Configure `.env.local` with all keys — `ANTHROPIC_API_KEY` populated; Supabase + VIC keys still blank (not yet needed)
-- [ ] Deploy skeleton to Vercel (auto-deploy on push)
+- [ ] Deploy skeleton to Vercel (auto-deploy on push) — adapter switched to `@sveltejs/adapter-vercel`; awaits the one-time `vercel.com/new` import + `ANTHROPIC_API_KEY` env var
 - [ ] Set up GitHub repo + branch protection on `main` — repo is not yet `git init`-ed
 
 ### Env vars needed

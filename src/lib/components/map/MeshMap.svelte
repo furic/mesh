@@ -1,20 +1,23 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
   import { browser } from '$app/environment'
-  import maplibregl, { type Map as MapLibreMap, type MapMouseEvent } from 'maplibre-gl'
-  import 'maplibre-gl/dist/maplibre-gl.css'
+  import { env as publicEnv } from '$env/dynamic/public'
+  import { setOptions, importLibrary } from '@googlemaps/js-api-loader'
   import type { Suburb } from '$lib/types'
   import suburbGeoRaw from '$lib/data/suburb-geometries.json'
 
-  // Type-narrow the imported JSON. TS imports JSON with widened literals
-  // (geometry.type becomes `string`), so we cast once at the top.
+  // Inline GeoJSON shapes so we don't depend on a @types/geojson install.
+  type PolygonGeom      = { type: 'Polygon';      coordinates: number[][][] }
+  type MultiPolygonGeom = { type: 'MultiPolygon'; coordinates: number[][][][] }
+
+  // Type-narrow the imported GeoJSON. TS widens JSON literals, so we cast once.
   interface SuburbGeoEntry {
     id:           string
     name:         string
     postcode:     string
     display_name: string
     bbox:         [number, number, number, number]
-    geometry:     GeoJSON.Polygon | GeoJSON.MultiPolygon
+    geometry:     PolygonGeom | MultiPolygonGeom
     centroid:     [number, number]
     point_count:  number
   }
@@ -34,451 +37,258 @@
 
   let { suburbs, selectedId, onselect, onhover }: Props = $props()
 
-  let container: HTMLDivElement
-  let burstEl:   HTMLDivElement
-  let map: MapLibreMap | undefined
-  let hoveredId: string | null = null
-  let topId:     string | null = null   // highest r_index suburb — always pulses
+  const apiKey = publicEnv.PUBLIC_GOOGLE_MAPS_API_KEY
+  const mapId  = publicEnv.PUBLIC_GOOGLE_MAPS_MAP_ID
+  const ready  = Boolean(apiKey && mapId)
+
+  let container: HTMLDivElement | undefined = $state()
+  let burstEl:   HTMLDivElement | undefined = $state()
+  let map:       google.maps.Map | undefined
+  let topId:     string | null = null
   let pulseRaf:  number | undefined
+  let topPulse:  google.maps.Circle | undefined
+  let hoveredId: string | null = null
+  let lastSelected: string | null = null
 
-  // Dark, label-light CARTO Voyager — free, no API key, retina tiles.
-  // Alternative: dark-matter (more austere). Voyager strikes a balance
-  // between MESH's editorial dark mood and enough street context to read.
-  const STYLE_URL = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
-
-  // Bounding box covering all 5 demo suburbs with breathing room.
-  const FIT_BOUNDS: [[number, number], [number, number]] = [
-    [144.85, -37.84],
-    [145.05, -37.74],
-  ]
+  // Per-suburb polygon overlay handles.
+  const polygons = new Map<string, google.maps.Polygon>()
 
   function colourForRIndex(r: number): string {
-    // 30 → red, 60 → amber, 90+ → green. Matches the existing palette.
     const t = Math.max(0, Math.min(1, (r - 30) / 60))
-    const hue = 0 + t * (135 - 0)      // 0=red → 135=green (HSL hue)
-    return `hsl(${Math.round(hue)}, 65%, 55%)`
+    const hue = Math.round(0 + t * 135)
+    return `hsl(${hue}, 65%, 55%)`
   }
 
-  // Compose a GeoJSON FeatureCollection of the 5 suburb polygons enriched
-  // with their app-level metadata (r_index, fill colour, level).
-  function buildFeatureCollection(suburbs: Suburb[]) {
+  function paths(geo: SuburbGeoEntry): google.maps.LatLngLiteral[][] {
+    const rings: number[][][] = geo.geometry.type === 'Polygon'
+      ? [geo.geometry.coordinates[0]]
+      : geo.geometry.coordinates.map((p: number[][][]) => p[0])
+    return rings.map((ring) => ring.map(([lng, lat]: number[]) => ({ lat, lng })))
+  }
+
+  function applyState(id: string) {
+    const p = polygons.get(id)
+    if (!p) return
+    const isSelected = id === selectedId
+    const isHover    = id === hoveredId
+    const opacity     = isSelected ? 0.45 : isHover ? 0.32 : 0.18
+    const strokeWidth = isSelected ? 3    : isHover ? 2    : 1.4
+    p.setOptions({ fillOpacity: opacity, strokeWeight: strokeWidth })
+  }
+
+  function setupPolygons(m: google.maps.Map) {
     const bySlug = Object.fromEntries(suburbs.map((s) => [s.id, s]))
-    return {
-      type: 'FeatureCollection' as const,
-      features: suburbGeoData.suburbs.map((g) => {
-        const s = bySlug[g.id]
-        const r = s?.r_index ?? 50
-        return {
-          type: 'Feature' as const,
-          id:   g.id,
-          properties: {
-            id:        g.id,
-            name:      g.name,
-            postcode:  g.postcode,
-            r_index:   r,
-            level:     s?.level ?? 1,
-            fill:      colourForRIndex(r),
-            centroid:  g.centroid,
-          },
-          geometry: g.geometry,
-        }
-      }),
-    }
-  }
 
-  function buildCentroidFC(suburbs: Suburb[]) {
-    const bySlug = Object.fromEntries(suburbs.map((s) => [s.id, s]))
-    return {
-      type: 'FeatureCollection' as const,
-      features: suburbGeoData.suburbs.map((g) => {
-        const s = bySlug[g.id]
-        const r = s?.r_index ?? 50
-        return {
-          type: 'Feature' as const,
-          id:   g.id,
-          properties: {
-            id:        g.id,
-            name:      g.name,
-            r_index:   r,
-            level:     s?.level ?? 1,
-            fill:      colourForRIndex(r),
-          },
-          geometry: {
-            type:        'Point' as const,
-            coordinates: g.centroid,
-          },
-        }
-      }),
-    }
-  }
-
-  function setupLayers(m: MapLibreMap) {
-    const fc        = buildFeatureCollection(suburbs)
-    const centroids = buildCentroidFC(suburbs)
-
-    // Pick the highest r_index suburb — gets a permanent pulsing crown ring.
+    // Pick the top-r_index suburb for the permanent pulse ring.
     topId = suburbs.reduce<{ id: string | null; r: number }>(
       (a, s) => (s.r_index > a.r ? { id: s.id, r: s.r_index } : a),
       { id: null, r: -Infinity },
     ).id
 
-    m.addSource('suburbs',           { type: 'geojson', data: fc })
-    m.addSource('suburb-centroids',  { type: 'geojson', data: centroids })
+    for (const geo of suburbGeoData.suburbs) {
+      const s    = bySlug[geo.id]
+      const r    = s?.r_index ?? 50
+      const color = colourForRIndex(r)
 
-    // Resilience halo — a soft glow around each centroid whose radius and
-    // opacity scale with r_index. This is the 2D substitute for 3D
-    // extrusion: bigger glow = healthier suburb, no camera pitch required.
-    m.addLayer({
-      id:     'resilience-halo',
-      type:   'circle',
-      source: 'suburb-centroids',
-      paint: {
-        'circle-color':   ['get', 'fill'],
-        'circle-radius': [
-          'interpolate', ['linear'], ['get', 'r_index'],
-          30,  16,
-          50,  28,
-          70,  48,
-          90,  72,
-        ],
-        'circle-blur':    1.0,
-        'circle-opacity': [
-          'interpolate', ['linear'], ['get', 'r_index'],
-          30,  0.18,
-          70,  0.40,
-          90,  0.55,
-        ],
-      },
-    })
-
-    // Fill layer — soft pillar-colour wash so the suburb reads as a place,
-    // not just a label. Sits flat under the extrusion so the colour is
-    // visible from any pitch.
-    m.addLayer({
-      id:     'suburb-fill',
-      type:   'fill',
-      source: 'suburbs',
-      paint: {
-        'fill-color': ['get', 'fill'],
-        'fill-opacity': [
-          'case',
-          ['boolean', ['feature-state', 'selected'], false], 0.45,
-          ['boolean', ['feature-state', 'hover'],    false], 0.32,
-          0.18,
-        ],
-      },
-    })
-
-    // (3D fill-extrusion was tried here. MapLibre supports it cleanly and
-    // OpenFreeMap can serve OSM building:height as `render_height`, but the
-    // Carto dark-matter basemap stays flat 2D, so the suburb prisms ended
-    // up floating above unrelated streets. The visual mismatch outweighed
-    // the 'altitude = resilience' read. Reverted in favour of the
-    // resilience-halo above + sharper hover/selection on the flat fill.)
-
-    // Outline — slightly brighter than fill so the boundary is legible.
-    m.addLayer({
-      id:     'suburb-outline',
-      type:   'line',
-      source: 'suburbs',
-      paint: {
-        'line-color': ['get', 'fill'],
-        'line-width': [
-          'case',
-          ['boolean', ['feature-state', 'selected'], false], 3.0,
-          ['boolean', ['feature-state', 'hover'],    false], 2.0,
-          1.2,
-        ],
-        'line-opacity': 0.95,
-      },
-    })
-
-    // Centroid dot — anchors the eye, especially when zoomed out.
-    m.addLayer({
-      id:     'suburb-dot',
-      type:   'circle',
-      source: 'suburb-centroids',
-      paint: {
-        'circle-color':         ['get', 'fill'],
-        'circle-radius': [
-          'case',
-          ['boolean', ['feature-state', 'selected'], false], 9,
-          ['boolean', ['feature-state', 'hover'],    false], 7,
-          5,
-        ],
-        'circle-stroke-color':  '#0c1320',
-        'circle-stroke-width':  1.5,
-        'circle-opacity':       0.95,
-      },
-    })
-
-    // Label — suburb name, then r_index in a smaller weight.
-    m.addLayer({
-      id:     'suburb-label',
-      type:   'symbol',
-      source: 'suburb-centroids',
-      layout: {
-        'text-field': [
-          'format',
-          ['get', 'name'], { 'font-scale': 1.0 },
-          '\n', {},
-          ['concat', 'r·', ['to-string', ['get', 'r_index']]], { 'font-scale': 0.78 },
-        ],
-        'text-font':            ['Open Sans Semibold', 'Arial Unicode MS Regular'],
-        'text-size':            14,
-        'text-offset':          [0, 1.2],
-        'text-anchor':          'top',
-        'text-allow-overlap':   false,
-        'text-letter-spacing':  0.05,
-      },
-      paint: {
-        'text-color':         '#f3f6ff',
-        'text-halo-color':    'rgba(6, 9, 15, 0.85)',
-        'text-halo-width':    1.4,
-        'text-halo-blur':     0.6,
-      },
-    })
-
-    // Top suburb — golden double-ring under the centroid. Two layers so the
-    // RAF loop can pulse the outer ring's radius/opacity independently.
-    if (topId) {
-      m.addLayer({
-        id:     'top-pulse-outer',
-        type:   'circle',
-        source: 'suburb-centroids',
-        filter: ['==', ['get', 'id'], topId],
-        paint: {
-          'circle-color':         '#f3c460',
-          'circle-radius':        16,
-          'circle-opacity':       0.0,           // RAF drives this
-          'circle-stroke-color':  '#f3c460',
-          'circle-stroke-width':  1.2,
-          'circle-stroke-opacity': 0.5,
-        },
+      const polygon = new google.maps.Polygon({
+        paths:           paths(geo),
+        strokeColor:     color,
+        strokeOpacity:   0.95,
+        strokeWeight:    1.4,
+        fillColor:       color,
+        fillOpacity:     0.18,
+        zIndex:          r,
+        clickable:       true,
       })
-      m.addLayer({
-        id:     'top-pulse-inner',
-        type:   'circle',
-        source: 'suburb-centroids',
-        filter: ['==', ['get', 'id'], topId],
-        paint: {
-          'circle-color':         'transparent',
-          'circle-radius':        11,
-          'circle-stroke-color':  '#fff0c2',
-          'circle-stroke-width':  2,
-          'circle-stroke-opacity': 0.95,
-        },
+      polygon.setMap(m)
+      polygons.set(geo.id, polygon)
+
+      polygon.addListener('mouseover', () => {
+        if (hoveredId === geo.id) return
+        const previous = hoveredId
+        hoveredId = geo.id
+        if (previous) applyState(previous)
+        applyState(geo.id)
+        m.getDiv().style.cursor = 'pointer'
+        onhover({ id: geo.id })
       })
-    }
-
-    // Connecting lines (resilience mesh) — pair every suburb to every other,
-    // line width by combined r_index. Subtle base; lights up when either
-    // endpoint is the selection.
-    const edges = []
-    for (let i = 0; i < suburbGeoData.suburbs.length; i++) {
-      for (let j = i + 1; j < suburbGeoData.suburbs.length; j++) {
-        const a = suburbGeoData.suburbs[i]
-        const b = suburbGeoData.suburbs[j]
-        const aR = bySlug(suburbs)[a.id]?.r_index ?? 50
-        const bR = bySlug(suburbs)[b.id]?.r_index ?? 50
-        edges.push({
-          type:       'Feature' as const,
-          properties: { a: a.id, b: b.id, strength: (aR + bR) / 200 },
-          geometry: {
-            type:        'LineString' as const,
-            coordinates: [a.centroid, b.centroid],
-          },
-        })
-      }
-    }
-    m.addSource('mesh-edges', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: edges },
-    })
-    m.addLayer(
-      {
-        id:     'mesh-edges',
-        type:   'line',
-        source: 'mesh-edges',
-        paint: {
-          'line-color':   '#8bb6ff',
-          'line-opacity': ['interpolate', ['linear'], ['get', 'strength'], 0.3, 0.08, 0.8, 0.25],
-          'line-width':   ['interpolate', ['linear'], ['get', 'strength'], 0.3, 0.6, 0.8, 1.6],
-          'line-blur':    0.6,
-        },
-      },
-      'suburb-fill',
-    )
-  }
-
-  // Tiny helper so the edge builder reads cleanly.
-  function bySlug(list: Suburb[]): Record<string, Suburb> {
-    return Object.fromEntries(list.map((s) => [s.id, s]))
-  }
-
-  function applyFeatureState(id: string | null, key: 'hover' | 'selected', on: boolean) {
-    if (!map || !id) return
-    map.setFeatureState({ source: 'suburbs',          id }, { [key]: on })
-    map.setFeatureState({ source: 'suburb-centroids', id }, { [key]: on })
-  }
-
-  function attachHandlers(m: MapLibreMap) {
-    const enterLayers = ['suburb-fill', 'suburb-dot']
-
-    for (const layer of enterLayers) {
-      m.on('mousemove', layer, (e: MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
-        const f = e.features?.[0]
-        const id = (f?.properties?.id as string) ?? null
-        if (id === hoveredId) return
-        if (hoveredId) applyFeatureState(hoveredId, 'hover', false)
-        hoveredId = id
-        if (id) applyFeatureState(id, 'hover', true)
-        m.getCanvas().style.cursor = 'pointer'
-        onhover({ id })
-      })
-      m.on('mouseleave', layer, () => {
-        if (hoveredId) applyFeatureState(hoveredId, 'hover', false)
+      polygon.addListener('mouseout', () => {
+        const previous = hoveredId
         hoveredId = null
-        m.getCanvas().style.cursor = ''
+        if (previous) applyState(previous)
+        m.getDiv().style.cursor = ''
         onhover({ id: null })
       })
-      m.on('click', layer, (e: MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
-        e.preventDefault?.()
-        const f = e.features?.[0]
-        const id = (f?.properties?.id as string) ?? null
-        onselect({ id: id === selectedId ? null : id })
+      polygon.addListener('click', (e: google.maps.PolyMouseEvent) => {
+        e.stop?.()
+        onselect({ id: geo.id === selectedId ? null : geo.id })
       })
     }
 
-    // Click on bare basemap deselects.
-    m.on('click', (e) => {
-      if (e.defaultPrevented) return
-      onselect({ id: null })
-    })
-  }
-
-  function flyToSelection(id: string | null) {
-    if (!map) return
-    if (!id) {
-      map.flyTo({
-        center: [144.95, -37.79],
-        zoom:   12.0,
-        pitch:  0,
-        bearing: 0,
-        speed:  1.2,
-        curve:  1.4,
-        essential: true,
-      })
-      return
+    // Top-suburb golden ring at its centroid. We animate via RAF below.
+    if (topId) {
+      const geo = suburbGeoData.suburbs.find((g) => g.id === topId)
+      if (geo) {
+        topPulse = new google.maps.Circle({
+          center:        { lat: geo.centroid[1], lng: geo.centroid[0] },
+          radius:        300,                                // metres, RAF-animated
+          strokeColor:   '#f3c460',
+          strokeOpacity: 0.65,
+          strokeWeight:  2,
+          fillColor:     '#f3c460',
+          fillOpacity:   0.10,
+          clickable:     false,
+          map:           m,
+        })
+        startPulseLoop()
+      }
     }
-    const geo = suburbGeoData.suburbs.find((g) => g.id === id)
-    if (!geo) return
-    map.flyTo({
-      center:   geo.centroid as [number, number],
-      zoom:     13.6,
-      pitch:    0,
-      bearing:  0,
-      speed:    1.4,
-      curve:    1.3,
-      essential: true,
-    })
-    triggerBurst(geo.centroid as [number, number])
   }
 
-  // Drive the top-suburb pulse via RAF — MapLibre can't animate paint
-  // properties over time on its own, so we set a sin-wave radius + opacity
-  // every frame. Cheap (one feature, one layer update per frame).
-  function startPulseLoop(m: MapLibreMap) {
-    if (!topId) return
+  function startPulseLoop() {
     const start = performance.now()
     const tick = (now: number) => {
-      if (!map) return
-      const t = ((now - start) / 1800) % 1            // 1.8s cycle
-      const phase = Math.sin(t * Math.PI * 2)         // -1..1
-      const radius  = 18 + (phase + 1) * 11           // 18..40
-      const opacity = 0.45 - (phase + 1) * 0.22       // 0.45..0.01
-      m.setPaintProperty('top-pulse-outer', 'circle-radius', radius)
-      m.setPaintProperty('top-pulse-outer', 'circle-opacity', Math.max(0, opacity))
-      m.setPaintProperty('top-pulse-outer', 'circle-stroke-opacity', Math.max(0, opacity + 0.1))
+      if (!topPulse) return
+      const t = ((now - start) / 1800) % 1
+      const phase = Math.sin(t * Math.PI * 2)        // -1..1
+      const radius  = 280 + (phase + 1) * 180        // 280..640 metres
+      const opacity = 0.40 - (phase + 1) * 0.18      // 0.40..0.04
+      topPulse.setRadius(radius)
+      topPulse.setOptions({
+        strokeOpacity: Math.max(0, opacity + 0.15),
+        fillOpacity:   Math.max(0, opacity * 0.35),
+      })
       pulseRaf = requestAnimationFrame(tick)
     }
     pulseRaf = requestAnimationFrame(tick)
   }
 
-  // Burst: animate the overlay div outward from a screen-projected centroid.
-  // The CSS keyframe does the visual; this function just positions + restarts
-  // the animation each time a new selection lands.
-  function triggerBurst(lngLat: [number, number]) {
+  function triggerBurst(centroid: [number, number]) {
     if (!map || !burstEl) return
-    const p = map.project(lngLat)
-    burstEl.style.left = `${p.x}px`
-    burstEl.style.top  = `${p.y}px`
-    // Restart by toggling the class — remove, force reflow, re-add.
+    const projection = map.getProjection()
+    if (!projection) return
+    // Approximate world-pixel projection. For an exact screen position we'd
+    // need MapCanvasProjection from an OverlayView; this is close enough at
+    // our zoom range that the burst lands on the suburb.
+    const div     = map.getDiv()
+    const bounds  = map.getBounds()
+    if (!bounds) return
+    const ne      = bounds.getNorthEast()
+    const sw      = bounds.getSouthWest()
+    const x = ((centroid[0] - sw.lng()) / (ne.lng() - sw.lng())) * div.clientWidth
+    const y = ((ne.lat() - centroid[1]) / (ne.lat() - sw.lat())) * div.clientHeight
+    burstEl.style.left = `${x}px`
+    burstEl.style.top  = `${y}px`
     burstEl.classList.remove('burst-fire')
     void burstEl.offsetWidth
     burstEl.classList.add('burst-fire')
   }
 
-  // React to external selection changes (e.g. clicking a sidebar row).
-  let lastSelected: string | null = null
+  function flyTo(id: string | null) {
+    if (!map) return
+    if (!id) {
+      map.panTo({ lat: -37.79, lng: 144.95 })
+      map.setZoom(12)
+      map.setTilt(0)
+      map.setHeading(0)
+      return
+    }
+    const geo = suburbGeoData.suburbs.find((g) => g.id === id)
+    if (!geo) return
+    map.panTo({ lat: geo.centroid[1], lng: geo.centroid[0] })
+    map.setZoom(15)
+    map.setTilt(67.5)       // 2.5D tilt — buildings extrude in vector mode
+    map.setHeading(20)
+    triggerBurst(geo.centroid)
+  }
+
+  // React to external selection changes (sidebar clicks).
   $effect(() => {
     if (!map) return
-    // Selected state on features
-    if (lastSelected && lastSelected !== selectedId) {
-      applyFeatureState(lastSelected, 'selected', false)
-    }
+    if (lastSelected && lastSelected !== selectedId) applyState(lastSelected)
     if (selectedId && selectedId !== lastSelected) {
-      applyFeatureState(selectedId, 'selected', true)
-      flyToSelection(selectedId)
+      applyState(selectedId)
+      flyTo(selectedId)
     } else if (!selectedId && lastSelected) {
-      flyToSelection(null)
+      flyTo(null)
     }
     lastSelected = selectedId
   })
 
-  onMount(() => {
-    if (!browser) return
-    map = new maplibregl.Map({
-      container,
-      style:        STYLE_URL,
-      bounds:       FIT_BOUNDS,
-      fitBoundsOptions: { padding: 80 },
-      minZoom:      10.5,
-      maxZoom:      16,
-      maxPitch:     0,                              // 2D only — see flyToSelection comment
-      maxBounds: [
-        [144.70, -37.95],
-        [145.20, -37.65],
-      ],
-      attributionControl: { compact: true },
-      cooperativeGestures: false,
-    })
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
+  onMount(async () => {
+    if (!browser || !ready) return
+    // v2 functional API: setOptions() then importLibrary() per surface needed.
+    setOptions({ key: apiKey!, v: 'weekly' })
+    const { Map }     = await importLibrary('maps')
+    const { Polygon } = await importLibrary('maps')      // same lib; pull both
+    void Polygon       // silence unused — also required for the Polygon class to be on `google.maps`
 
-    map.on('load', () => {
-      if (!map) return
-      setupLayers(map)
-      attachHandlers(map)
-      startPulseLoop(map)
-      // If a selection was already set by the parent before the map loaded,
-      // apply it.
-      if (selectedId) {
-        applyFeatureState(selectedId, 'selected', true)
-        flyToSelection(selectedId)
-      }
+    map = new Map(container!, {
+      center:           { lat: -37.79, lng: 144.95 },
+      zoom:             12,
+      mapId:            mapId!,                          // vector + tilt + 3D buildings
+      tilt:             0,
+      heading:          0,
+      disableDefaultUI: false,
+      streetViewControl: false,
+      mapTypeControl:   false,
+      fullscreenControl: false,
+      rotateControl:    true,
+      zoomControl:      true,
+      restriction: {
+        latLngBounds: { north: -37.65, south: -37.95, west: 144.70, east: 145.20 },
+        strictBounds: false,
+      },
     })
+
+    setupPolygons(map)
+
+    map.addListener('click', () => {
+      onselect({ id: null })
+    })
+
+    if (selectedId) {
+      applyState(selectedId)
+      flyTo(selectedId)
+    }
   })
 
   onDestroy(() => {
     if (!browser) return
     if (pulseRaf) cancelAnimationFrame(pulseRaf)
-    map?.remove()
+    polygons.forEach((p) => p.setMap(null))
+    polygons.clear()
+    topPulse?.setMap(null)
   })
 </script>
 
-<div class="map-host" bind:this={container}>
-  <div class="select-burst" bind:this={burstEl} aria-hidden="true"></div>
-</div>
+{#if ready}
+  <div class="map-host" bind:this={container}>
+    <div class="select-burst" bind:this={burstEl} aria-hidden="true"></div>
+  </div>
+{:else}
+  <div class="setup-card" role="region" aria-label="Google Maps setup required">
+    <p class="eyebrow">SETUP REQUIRED</p>
+    <h2>Drop in a Google Maps key</h2>
+    <p class="lede">
+      The 2.5D map uses Google Maps Platform — free for our usage but needs a one-time
+      key + Map ID setup. The dev server reads them from <code>.env.local</code>.
+    </p>
+    <ol>
+      <li>Open <a href="https://console.cloud.google.com" target="_blank" rel="noopener">Google Cloud Console</a> → create or select a project.</li>
+      <li>Enable <strong>billing</strong> (Maps APIs require it; $200/mo free credit).</li>
+      <li>Enable <strong>Maps JavaScript API</strong> under APIs &amp; Services → Library.</li>
+      <li>Create an <strong>API key</strong>; restrict it to <code>localhost:5173/*</code> + your Vercel URL.</li>
+      <li>Create a <strong>Map ID</strong> under Maps Platform → Map Management. Map type = JavaScript. Enable <em>Tilt</em> + <em>Rotation</em>.</li>
+      <li>Add to <code>.env.local</code>:
+        <pre>PUBLIC_GOOGLE_MAPS_API_KEY=AIza...
+PUBLIC_GOOGLE_MAPS_MAP_ID=abc123...</pre>
+      </li>
+      <li>Restart the dev server. The 2.5D map will appear here.</li>
+    </ol>
+    <p class="footnote">See <code>.env.example</code> for the same instructions in source form.</p>
+  </div>
+{/if}
 
 <style>
   .map-host {
@@ -488,10 +298,87 @@
     height: 100%;
   }
 
-  /* Selection burst — a triple-ring expanding from the projected centroid
-     each time a suburb is selected. The element sits absolute over the map
-     canvas; JS sets left/top to map.project(centroid) and re-fires the
-     animation by toggling .burst-fire. */
+  /* === Setup-card fallback shown when Google Maps env vars are missing === */
+  .setup-card {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 48px 56px;
+    color: #ecf1ff;
+    font-family: 'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, sans-serif;
+    line-height: 1.55;
+    background:
+      radial-gradient(700px 500px at 70% 10%, rgba(127, 196, 151, 0.10), transparent 60%),
+      radial-gradient(700px 600px at 10% 80%, rgba(232, 162, 62, 0.07), transparent 60%),
+      #06090f;
+  }
+  .setup-card .eyebrow {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #e8a23e;
+    margin: 0 0 18px;
+  }
+  .setup-card h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 380;
+    font-size: clamp(1.8rem, 3vw + 0.8rem, 3rem);
+    margin: 0 0 14px;
+    letter-spacing: -0.02em;
+    line-height: 1.06;
+  }
+  .setup-card .lede {
+    color: #c9d2e6;
+    font-size: 1.02rem;
+    max-width: 640px;
+    margin: 0 0 24px;
+  }
+  .setup-card ol {
+    margin: 0 0 24px;
+    padding-left: 22px;
+    color: #c9d2e6;
+    max-width: 640px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .setup-card ol li::marker {
+    color: #e8a23e;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .setup-card strong { color: #ecf1ff; font-weight: 600; }
+  .setup-card em     { color: #e8a23e; font-style: italic; }
+  .setup-card code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.86rem;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #ecf1ff;
+  }
+  .setup-card pre {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 0.84rem;
+    margin: 8px 0 0;
+    color: #b3e3a3;
+    font-family: 'JetBrains Mono', monospace;
+    overflow-x: auto;
+  }
+  .setup-card .footnote {
+    color: #8893ad;
+    font-size: 0.88rem;
+    margin: 0;
+  }
+  .setup-card a { color: #8bb6ff; }
+
+  /* === Selection burst (same idiom as the MapLibre version) === */
   .select-burst {
     position: absolute;
     width: 0; height: 0;
@@ -511,8 +398,6 @@
     box-shadow: 0 0 24px rgba(243, 196, 96, 0.55);
     opacity: 0;
   }
-  /* `.burst-fire` is toggled from JS; Svelte's static scoper can't see it,
-     so we wrap the pseudo-element animation rules in :global(). */
   :global(.select-burst.burst-fire::before) {
     animation: burst-ring 900ms cubic-bezier(0.16, 0.7, 0.2, 1) forwards;
   }
@@ -523,26 +408,5 @@
     0%   { transform: scale(0.6); opacity: 0.9; }
     60%  { opacity: 0.7; }
     100% { transform: scale(8);   opacity: 0;   }
-  }
-  /* Tweak MapLibre's default chrome to fit MESH dark theme. */
-  :global(.maplibregl-ctrl-attrib) {
-    background: rgba(6, 9, 15, 0.55) !important;
-    color: #6e7993 !important;
-    font-size: 0.66rem !important;
-    backdrop-filter: blur(4px);
-  }
-  :global(.maplibregl-ctrl-attrib a) {
-    color: #8bb6ff !important;
-  }
-  :global(.maplibregl-ctrl-group) {
-    background: rgba(12, 18, 35, 0.78) !important;
-    border: 1px solid rgba(139, 182, 255, 0.18) !important;
-    box-shadow: none !important;
-  }
-  :global(.maplibregl-ctrl-group button) {
-    background: transparent !important;
-  }
-  :global(.maplibregl-ctrl-group button:hover) {
-    background: rgba(139, 182, 255, 0.10) !important;
   }
 </style>

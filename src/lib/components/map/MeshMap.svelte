@@ -125,6 +125,32 @@
     m.addSource('suburbs',           { type: 'geojson', data: fc })
     m.addSource('suburb-centroids',  { type: 'geojson', data: centroids })
 
+    // Resilience halo — a soft glow around each centroid whose radius and
+    // opacity scale with r_index. This is the 2D substitute for 3D
+    // extrusion: bigger glow = healthier suburb, no camera pitch required.
+    m.addLayer({
+      id:     'resilience-halo',
+      type:   'circle',
+      source: 'suburb-centroids',
+      paint: {
+        'circle-color':   ['get', 'fill'],
+        'circle-radius': [
+          'interpolate', ['linear'], ['get', 'r_index'],
+          30,  16,
+          50,  28,
+          70,  48,
+          90,  72,
+        ],
+        'circle-blur':    1.0,
+        'circle-opacity': [
+          'interpolate', ['linear'], ['get', 'r_index'],
+          30,  0.18,
+          70,  0.40,
+          90,  0.55,
+        ],
+      },
+    })
+
     // Fill layer — soft pillar-colour wash so the suburb reads as a place,
     // not just a label. Sits flat under the extrusion so the colour is
     // visible from any pitch.
@@ -143,36 +169,12 @@
       },
     })
 
-    // 3D extrusion — each suburb pops up as a prism. Height scales with
-    // r_index so 'taller = healthier' reads at a glance once the camera
-    // pitches on selection.
-    //
-    // MapLibre constraint: fill-extrusion-opacity does NOT accept data
-    // expressions (it's a layout-time uniform). We compensate by darkening
-    // the *colour* on non-selected features so they read as 'in the
-    // background'. Selection still pops via colour + the outline below.
-    m.addLayer({
-      id:     'suburb-extrude',
-      type:   'fill-extrusion',
-      source: 'suburbs',
-      paint: {
-        'fill-extrusion-color': [
-          'case',
-          ['boolean', ['feature-state', 'selected'], false], ['get', 'fill'],
-          ['boolean', ['feature-state', 'hover'],    false], ['get', 'fill'],
-          ['get', 'fill'],
-        ],
-        'fill-extrusion-base':    0,
-        'fill-extrusion-height': [
-          'interpolate', ['linear'], ['zoom'],
-          11, ['*', ['get', 'r_index'],  20],
-          14, ['*', ['get', 'r_index'],  90],
-          16, ['*', ['get', 'r_index'], 180],
-        ],
-        'fill-extrusion-opacity':           0.5,
-        'fill-extrusion-vertical-gradient': true,
-      },
-    })
+    // (3D fill-extrusion was tried here. MapLibre supports it cleanly and
+    // OpenFreeMap can serve OSM building:height as `render_height`, but the
+    // Carto dark-matter basemap stays flat 2D, so the suburb prisms ended
+    // up floating above unrelated streets. The visual mismatch outweighed
+    // the 'altitude = resilience' read. Reverted in favour of the
+    // resilience-halo above + sharper hover/selection on the flat fill.)
 
     // Outline — slightly brighter than fill so the boundary is legible.
     m.addLayer({
@@ -374,8 +376,8 @@
     map.flyTo({
       center:   geo.centroid as [number, number],
       zoom:     13.6,
-      pitch:    55,                              // 3D tilt
-      bearing:  10,                              // slight angle so prisms read as 3D
+      pitch:    0,
+      bearing:  0,
       speed:    1.4,
       curve:    1.3,
       essential: true,
@@ -443,6 +445,7 @@
       fitBoundsOptions: { padding: 80 },
       minZoom:      10.5,
       maxZoom:      16,
+      maxPitch:     0,                              // 2D only — see flyToSelection comment
       maxBounds: [
         [144.70, -37.95],
         [145.20, -37.65],

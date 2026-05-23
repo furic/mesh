@@ -1,5 +1,17 @@
 # MESH — Melbourne Exchange & Solidarity Hub
 
+[![Live demo](https://img.shields.io/badge/Live%20demo-on%20Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://mesh-pi-topaz.vercel.app/)
+[![Built at Claude Impact Lab](https://img.shields.io/badge/Built%20at-Claude%20Impact%20Lab%20%C2%B7%20Melbourne%202026-D97757?style=for-the-badge&logo=anthropic&logoColor=white)](https://www.anthropic.com/)
+
+![Svelte 5](https://img.shields.io/badge/Svelte_5-runes_mode-FF3E00?style=flat-square&logo=svelte&logoColor=white)
+![SvelteKit 2](https://img.shields.io/badge/SvelteKit-2-FF3E00?style=flat-square&logo=svelte&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Claude Sonnet 4](https://img.shields.io/badge/Claude-Sonnet_4-D97757?style=flat-square&logo=anthropic&logoColor=white)
+![Google Maps 2.5D](https://img.shields.io/badge/Google_Maps-2.5D_vector-4285F4?style=flat-square&logo=googlemaps&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-PostGIS-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
+![Vercel](https://img.shields.io/badge/deployed%20on-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
+![Status](https://img.shields.io/badge/status-prototype-9E9E9E?style=flat-square)
+
 > A gamified civic platform where Melbourne residents discover local resources, complete community quests, and collectively build suburb-level resilience — powered by Victorian open data and AI agents.
 >
 > The name reads as the visualisation itself: a **mesh** of suburbs, an **exchange** of skills and tools, and the **solidarity** that turns a network into a community.

@@ -27,14 +27,14 @@
 
 <svelte:head>
   <link rel="icon" href={favicon} />
-  <title>MESH — Melbourne Resilience Network</title>
+  <title>MESH — Melbourne Exchange & Solidarity Hub</title>
 </svelte:head>
 
 <nav class="topnav">
   <a class="brand" href="/" aria-label="MESH home">
     <span class="logo-dot" aria-hidden="true"></span>
     <span class="logo-text">MESH</span>
-    <span class="tagline">Melbourne Resilience Network</span>
+    <span class="tagline">Melbourne Exchange & Solidarity Hub</span>
   </a>
   <div class="right">
     <ul role="list" class="tabs">

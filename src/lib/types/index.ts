@@ -58,3 +58,24 @@ export interface GeneratedQuest {
   ai_rationale:       string
   expires_days:       number
 }
+
+// Persisted DB row shapes — re-exported from the hand-typed db.ts so that
+// components can import everything they need from $lib/types. Replace these
+// with `supabase gen types` output once the Supabase project is provisioned.
+export type {
+  DbQuest as Quest,
+  DbQuestParticipant as QuestParticipant,
+  DbQuestSubmission as QuestSubmission,
+  DbResource as Resource,
+  DbResourceMatch as ResourceMatch,
+  DbSuburbNarrative as SuburbNarrative,
+  DbProfile as Profile,
+  DbXpLedger as XpLedger,
+  SubmissionVerdictEnum as SubmissionVerdict,
+  QuestStatusEnum as QuestStatus,
+  QuestSourceEnum as QuestSource,
+  ResourceTypeEnum as ResourceType,
+  ResourceCategoryEnum as ResourceCategory,
+  ResourceStatusEnum as ResourceStatus,
+  SuburbDataSource,
+} from './db'

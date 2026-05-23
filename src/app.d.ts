@@ -1,27 +1,20 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
 
-// Minimal Supabase shape — narrowed to what the advisor endpoint reads today.
-// Sprint 2 replaces this with the typed client returned by `supabase gen types`.
-interface SupabaseStub {
-  from(table: string): {
-    select(columns: string): {
-      eq(col: string, val: unknown): {
-        eq(col: string, val: unknown): {
-          single(): Promise<{ data: unknown }>
-        }
-      }
-    }
-  }
-}
+import type { SupabaseClient, Session, User } from '@supabase/supabase-js';
+import type { Database } from '$lib/types/db';
 
 declare global {
   namespace App {
     // interface Error {}
     interface Locals {
-      supabase: SupabaseStub
+      supabase:    SupabaseClient<Database>;
+      safeGetUser: () => Promise<{ user: User | null; session: Session | null }>;
     }
-    // interface PageData {}
+    interface PageData {
+      session: Session | null;
+      user:    User | null;
+    }
     // interface PageState {}
     // interface Platform {}
   }

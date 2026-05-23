@@ -71,15 +71,22 @@ GET https://discover.data.vic.gov.au/api/3/action/datastore_search?resource_id=<
 **Goal**: Full schema live, TypeScript types generated, RLS policies in place.
 
 ### Tasks
-- [ ] Write all migrations (see `docs/SCHEMA.md`)
-- [ ] Enable Row Level Security on all tables
-- [ ] Write RLS policies: residents own their resources/submissions
-- [ ] Generate TypeScript types from Supabase schema (`supabase gen types`)
-- [ ] Build `src/lib/types/index.ts` — domain types (Quest, Resource, Suburb, etc.)
-- [ ] Build `src/lib/stores/` — Svelte stores for user, suburb, quests
+- [x] Write all migrations (see `docs/SCHEMA.md`) — `supabase/migrations/0001` through `0013`. Adds postgis + pgcrypto extensions, all 11 SCHEMA.md tables, and the `suburb_leaderboard` view.
+- [x] Enable Row Level Security on all tables — RLS on every table, even ones with no public-facing policy (e.g. `data_snapshots` is service-role-only).
+- [x] Write RLS policies: residents own their resources/submissions — per-table policies follow SCHEMA.md: public read for `quests.status='active'` / `resources.status='open'` / `suburb_narratives` / `community_facilities` / `suburbs`; owner-only for `profiles` / `quest_submissions` / `resources` / `xp_ledger`; participant-visibility for `resource_matches`.
+- [ ] Generate TypeScript types from Supabase schema (`supabase gen types`) — **deferred until a Supabase project is provisioned**. As a stopgap, hand-typed `src/lib/types/db.ts` mirrors the migrations and provides the `Database` generic for `SupabaseClient<Database>`. Two quirks worth knowing: (a) postgrest-js's `GenericTable` requires `Relationships: []` on every entry; (b) row types must be declared with `type X = { ... }`, **not** `interface X`, or postgrest-js's conditional-type narrowing falls through to `never`.
+- [x] Build `src/lib/types/index.ts` — domain types (Quest, Resource, Suburb, etc.) — extends the existing `Suburb` view-model with re-exports of every DB row type from `db.ts`. Components can `import { Quest, Resource, Profile, … } from '$lib/types'` directly.
+- [x] Build `src/lib/stores/` — Svelte stores for user, suburb, quests. New: `user.svelte.ts` (session/user/profile state, populated from `+layout.svelte`), `suburb.svelte.ts` (current + list, seeded from MOCK_SUBURBS with a `loadFromDb(client)` method). Existing: `quests.svelte.ts` (unchanged from Sprint 0).
+- [x] Wire `src/hooks.server.ts` — per-request server client via `@supabase/ssr.createServerClient<Database>`; falls back to a typed Proxy stub when `PUBLIC_SUPABASE_URL`/`PUBLIC_SUPABASE_ANON_KEY` are empty (so existing routes that only use `MOCK_SUBURBS` keep working).
+- [x] Replace `src/app.d.ts` stub with real `SupabaseClient<Database>` + `safeGetUser` on `App.Locals`.
+
+### Deferred until Supabase project is provisioned
+- Pushing migrations to a live database (`supabase db push` or running them in the Supabase SQL editor)
+- Replacing hand-typed `db.ts` with `supabase gen types typescript --linked > src/lib/types/db.ts`
+- End-to-end RLS testing in Supabase Studio
 
 ### Deliverable
-All tables live, types generated, RLS tested in Supabase Studio.
+~~All tables live, types generated, RLS tested in Supabase Studio.~~ Revised: migration SQL + hand-typed schema + per-request server client + stores all land offline; live DB activation is one user-action (provision Supabase, paste keys) away.
 
 ---
 

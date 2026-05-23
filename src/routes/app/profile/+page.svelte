@@ -182,6 +182,12 @@
         </div>
       </div>
       <XPBar xp={profile.xp_total} />
+      <div class="demo-row" title="No quest-completion flow yet — this button stands in until Sprint 7's Submission Verifier awards XP for real.">
+        <span class="demo-tag">DEMO</span>
+        <button class="btn-tiny ghost" type="button" onclick={() => userStore.updateProfile({ xp_total: (profile?.xp_total ?? 0) + 250 })}>+250 XP</button>
+        <button class="btn-tiny ghost" type="button" onclick={() => userStore.updateProfile({ xp_total: (profile?.xp_total ?? 0) + 1500 })}>+1,500 XP</button>
+        <button class="btn-tiny ghost" type="button" onclick={() => userStore.updateProfile({ xp_total: 0 })}>Reset</button>
+      </div>
     </section>
 
     <!-- Stats grid -->
@@ -470,6 +476,24 @@
     text-transform: uppercase;
     color: #8893ad;
     margin-top: 4px;
+  }
+
+  .demo-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    cursor: help;
+  }
+  .demo-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.18em;
+    color: #e8a23e;
+    background: rgba(232, 162, 62, 0.10);
+    padding: 3px 8px;
+    border-radius: 999px;
+    margin-right: 4px;
   }
 
   /* ===== Stats grid ===== */

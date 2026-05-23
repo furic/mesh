@@ -48,7 +48,11 @@
   let map:       google.maps.Map | undefined = $state()
   let topId:     string | null = null
   let pulseRaf:  number | undefined
+  let edgeRaf:   number | undefined
   let topPulse:  google.maps.Circle | undefined
+  // Inter-suburb mesh edges. Each entry is a Polyline with one icon that we
+  // step along the line to fake a flowing particle.
+  const edgePolylines: { line: google.maps.Polyline; strength: number }[] = []
   let hoveredId: string | null = null
   let lastSelected: string | null = null
   // User-facing 2D / 3D toggle. Defaults to 3D; persisted in localStorage.
@@ -129,6 +133,51 @@
       })
     }
 
+    // Inter-suburb mesh edges — one geodesic Polyline per pair, weighted by
+    // combined r_index. Each line has a single "flowing" arrow icon that we
+    // step from offset 0% to 100% in a RAF loop, so the connection reads as
+    // active. (`bySlug` already declared above for polygon styling.)
+    for (let i = 0; i < suburbGeoData.suburbs.length; i++) {
+      for (let j = i + 1; j < suburbGeoData.suburbs.length; j++) {
+        const a = suburbGeoData.suburbs[i]
+        const b = suburbGeoData.suburbs[j]
+        const aR = bySlug[a.id]?.r_index ?? 50
+        const bR = bySlug[b.id]?.r_index ?? 50
+        const strength = (aR + bR) / 200          // 0..1
+        if (strength < 0.40) continue              // skip weakly-connected pairs
+
+        const line = new google.maps.Polyline({
+          path: [
+            { lat: a.centroid[1], lng: a.centroid[0] },
+            { lat: b.centroid[1], lng: b.centroid[0] },
+          ],
+          geodesic:      true,
+          strokeColor:   '#c2d8ff',
+          strokeOpacity: 0.5 + strength * 0.25,
+          strokeWeight:  2 + strength * 2.5,
+          clickable:     false,
+          zIndex:        1000,                       // above polygons
+          icons: [
+            {
+              // The "flowing" particle — bright dot we slide along the line.
+              icon: {
+                path:           google.maps.SymbolPath.CIRCLE,
+                scale:          5,
+                strokeColor:    '#fff5d6',
+                strokeWeight:   2,
+                fillColor:      '#b3e3a3',
+                fillOpacity:    1,
+              },
+              offset: '0%',
+            },
+          ],
+          map: m,
+        })
+        edgePolylines.push({ line, strength })
+      }
+    }
+    startEdgeFlow()
+
     // Top-suburb golden ring at its centroid. We animate via RAF below.
     if (topId) {
       const geo = suburbGeoData.suburbs.find((g) => g.id === topId)
@@ -147,6 +196,30 @@
         startPulseLoop()
       }
     }
+  }
+
+  // Animate the second icon on each mesh-edge Polyline from offset 0% → 100%,
+  // looping. Different starting phases per edge so the particles don't move
+  // in lock-step. Cheap: ~6 polylines × 1 paint property update per frame.
+  function startEdgeFlow() {
+    if (edgePolylines.length === 0) return
+    const start = performance.now()
+    const tick = (now: number) => {
+      if (edgePolylines.length === 0) return
+      const elapsed = (now - start) / 1000
+      for (let i = 0; i < edgePolylines.length; i++) {
+        const { line } = edgePolylines[i]
+        // 5-second loop; each edge offset by 0.7s so the particles cascade.
+        const t = ((elapsed + i * 0.7) / 5) % 1
+        const icons = line.get('icons') as google.maps.IconSequence[] | undefined
+        if (icons && icons[0]) {
+          icons[0].offset = `${Math.round(t * 100)}%`
+          line.set('icons', icons)
+        }
+      }
+      edgeRaf = requestAnimationFrame(tick)
+    }
+    edgeRaf = requestAnimationFrame(tick)
   }
 
   function startPulseLoop() {
@@ -293,8 +366,11 @@
   onDestroy(() => {
     if (!browser) return
     if (pulseRaf) cancelAnimationFrame(pulseRaf)
+    if (edgeRaf)  cancelAnimationFrame(edgeRaf)
     polygons.forEach((p) => p.setMap(null))
     polygons.clear()
+    edgePolylines.forEach(({ line }) => line.setMap(null))
+    edgePolylines.length = 0
     topPulse?.setMap(null)
   })
 </script>

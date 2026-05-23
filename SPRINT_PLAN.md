@@ -106,9 +106,9 @@ GET https://discover.data.vic.gov.au/api/3/action/datastore_search?resource_id=<
 - [x] Permanent pulsing golden ring around the highest-r_index suburb (RAF-driven `google.maps.Circle`)
 - [x] Selection burst overlay — expanding CSS double-ring at the projected centroid each time a suburb is selected
 - [x] Setup-card fallback rendered on `/` when `PUBLIC_GOOGLE_MAPS_API_KEY` / `PUBLIC_GOOGLE_MAPS_MAP_ID` are missing — keeps the prototype demoable before the keys are pasted
-- [ ] Animate inter-suburb mesh edges with flowing particles (TubeGeometry-equivalent in Google Maps — likely via a custom WebGL overlay or animated `Polyline` segments)
-- [ ] XP-burst particle effect when the resident's profile crosses a level threshold
-- [ ] Day/night ambient cycle — feasible by swapping the Map ID's daytime/nighttime theme on a 60s loop, but lower priority than the agent loop
+- [x] Animate inter-suburb mesh edges with flowing particles — every pair with combined r_index > 80 gets a geodesic `google.maps.Polyline` with a bright dot icon that RAF-steps from 0% → 100% offset on a 5-second loop, staggered 0.7 s per edge. Line width + opacity scale with the joint resilience. **Semantics**: today the particles represent *potential* exchange capacity; Sprint 8's Resource Matchmaker will repoint them at real cross-suburb matches.
+- [x] XP-burst particle effect — `XPBar.svelte` watches `levelProgress(xp).level` via `$effect`; when it rises, a `+N` Fraunces badge rises out of the bar and 14 confetti particles fly outward + fade, with a "LEVEL UP" pill in the bar meta. A `DEMO · +250 / +1,500 / Reset` row on `/app/profile` makes it triggerable without a real submission flow.
+- [ ] Day/night ambient cycle — deferred. Feasible by swapping the Map ID's daytime/nighttime theme on a 60 s loop, but the swap is jarring without a paired CSS tint overlay, and the Sprint Plan flags it as the lowest priority. Revisit alongside Sprint 10 polish.
 
 ### Deliverable
 Full-screen real Melbourne map renders the 5 demo suburbs as colour-coded polygons. Selection flies the camera in, tilts to 2.5D, and reveals CBD building extrusion. Top suburb pulses; selections fire a screen burst. ✅ Live (gated on the two `PUBLIC_GOOGLE_MAPS_*` env vars; the setup-card guides you through the ~10-minute first-time setup).

@@ -4,6 +4,8 @@
 >
 > The name reads as the visualisation itself: a **mesh** of suburbs, an **exchange** of skills and tools, and the **solidarity** that turns a network into a community.
 
+**🌐 Live demo →** [mesh-pi-topaz.vercel.app](https://mesh-pi-topaz.vercel.app/)
+
 ![Globe with Brunswick selected, showing pillar scores](docs/screenshots/globe.png)
 
 ## What it is

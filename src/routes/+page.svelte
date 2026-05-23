@@ -1,5 +1,5 @@
 <script lang="ts">
-  import MeshGlobe     from '$lib/components/globe/MeshGlobe.svelte'
+  import MeshMap       from '$lib/components/map/MeshMap.svelte'
   import SuburbList    from '$lib/components/suburb/SuburbList.svelte'
   import AdvisorChat   from '$lib/components/suburb/AdvisorChat.svelte'
   import SuburbDigest  from '$lib/components/suburb/SuburbDigest.svelte'
@@ -24,7 +24,7 @@
 <main>
   <section class="stage">
     <div class="globe-wrap">
-      <MeshGlobe {suburbs} {selectedId} onselect={onSelect} onhover={onHover} />
+      <MeshMap {suburbs} {selectedId} onselect={onSelect} onhover={onHover} />
     </div>
 
     {#if selected}

@@ -43,12 +43,16 @@
 
   let container: HTMLDivElement | undefined = $state()
   let burstEl:   HTMLDivElement | undefined = $state()
-  let map:       google.maps.Map | undefined
+  // `map` is $state so the $effect that handles selection re-runs once
+  // the async loader finishes and assigns the map instance.
+  let map:       google.maps.Map | undefined = $state()
   let topId:     string | null = null
   let pulseRaf:  number | undefined
   let topPulse:  google.maps.Circle | undefined
   let hoveredId: string | null = null
   let lastSelected: string | null = null
+  // User-facing 2D / 3D toggle. Defaults to 3D; persisted in localStorage.
+  let view3D: boolean = $state(true)
 
   // Per-suburb polygon overlay handles.
   const polygons = new Map<string, google.maps.Polygon>()
@@ -197,9 +201,36 @@
     if (!geo) return
     map.panTo({ lat: geo.centroid[1], lng: geo.centroid[0] })
     map.setZoom(15)
-    map.setTilt(67.5)       // 2.5D tilt — buildings extrude in vector mode
-    map.setHeading(20)
+    if (view3D) {
+      map.setTilt(67.5)     // Google clamps this to 60° max for vector maps.
+      map.setHeading(20)
+    } else {
+      map.setTilt(0)
+      map.setHeading(0)
+    }
     triggerBurst(geo.centroid)
+  }
+
+  // Toggle 2D ↔ 3D. Persisted so it survives reloads.
+  const LS_VIEW = 'mesh.map.view3d'
+  function setView3D(next: boolean) {
+    view3D = next
+    if (browser) {
+      try { localStorage.setItem(LS_VIEW, next ? '1' : '0') } catch {}
+    }
+    if (map) {
+      if (!next) {
+        map.setTilt(0)
+        map.setHeading(0)
+      } else if (selectedId) {
+        // Re-apply the tilt for the current selection.
+        const geo = suburbGeoData.suburbs.find((g) => g.id === selectedId)
+        if (geo) {
+          map.setTilt(67.5)
+          map.setHeading(20)
+        }
+      }
+    }
   }
 
   // React to external selection changes (sidebar clicks).
@@ -217,6 +248,11 @@
 
   onMount(async () => {
     if (!browser || !ready) return
+    // Restore the 2D/3D preference before the map loads.
+    try {
+      const persisted = localStorage.getItem(LS_VIEW)
+      if (persisted === '0') view3D = false
+    } catch {}
     // v2 functional API: setOptions() then importLibrary() per surface needed.
     setOptions({ key: apiKey!, v: 'weekly' })
     const { Map }     = await importLibrary('maps')
@@ -224,6 +260,7 @@
     void Polygon       // silence unused — also required for the Polygon class to be on `google.maps`
 
     map = new Map(container!, {
+      colorScheme: google.maps.ColorScheme.DARK,
       center:           { lat: -37.79, lng: 144.95 },
       zoom:             12,
       mapId:            mapId!,                          // vector + tilt + 3D buildings
@@ -263,8 +300,23 @@
 </script>
 
 {#if ready}
-  <div class="map-host" bind:this={container}>
+  <div class="map-wrapper">
+    <!-- Google Maps wipes any children inside the container on init, so the
+         burst overlay and the 2D/3D toggle live as *siblings* of .map-host. -->
+    <div class="map-host" bind:this={container}></div>
     <div class="select-burst" bind:this={burstEl} aria-hidden="true"></div>
+    <div class="view-toggle" role="group" aria-label="Map view">
+      <button
+        class:active={!view3D}
+        onclick={() => setView3D(false)}
+        type="button"
+      >2D</button>
+      <button
+        class:active={view3D}
+        onclick={() => setView3D(true)}
+        type="button"
+      >3D</button>
+    </div>
   </div>
 {:else}
   <div class="setup-card" role="region" aria-label="Google Maps setup required">
@@ -291,11 +343,51 @@ PUBLIC_GOOGLE_MAPS_MAP_ID=abc123...</pre>
 {/if}
 
 <style>
+  .map-wrapper {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
   .map-host {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
+  }
+
+  /* 2D / 3D segmented toggle, top-left of the map. */
+  .view-toggle {
+    position: absolute;
+    top: 72px;       /* below the topnav */
+    left: 16px;
+    z-index: 5;
+    display: inline-flex;
+    background: rgba(12, 18, 35, 0.85);
+    border: 1px solid rgba(139, 182, 255, 0.25);
+    border-radius: 999px;
+    padding: 3px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.4);
+  }
+  .view-toggle button {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: #aab4cc;
+    padding: 6px 14px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.74rem;
+    letter-spacing: 0.14em;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 180ms ease, color 180ms ease;
+  }
+  .view-toggle button:hover { color: #e5ecff; }
+  .view-toggle button.active {
+    background: linear-gradient(180deg, #5481d6, #3962b8);
+    color: #fff;
+    box-shadow: 0 0 0 1px rgba(139, 182, 255, 0.3) inset;
   }
 
   /* === Setup-card fallback shown when Google Maps env vars are missing === */

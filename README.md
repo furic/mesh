@@ -27,13 +27,15 @@ Full agent specs in [AGENTS.md](AGENTS.md).
 
 The frontend, three AI agents, real open-data-derived suburb scores, a demo auth + profile flow, a long-form pitch page, and five inner-Melbourne suburbs rendered on a real Google Maps basemap are live. Supabase migrations are written and the typed client is wired offline; provisioning + DB-backed reads land next.
 
-**At `/`** — the map. Real Melbourne basemap with five suburb polygons (OSM boundaries) colour-coded by R-index. Sidebar selection or a polygon click flies the camera in, tilts to 2.5D, and reveals 3D building extrusion in the CBD via Google Maps' WebGL vector renderer. The top-r_index suburb has a permanent pulsing golden ring; every selection fires a screen-projected burst animation. The detail card shows pillar scores plus a live **advisor chat** that streams Claude responses contextualised to that suburb.
+**At `/`** — the map. Real Melbourne basemap with five suburb polygons (OSM boundaries) colour-coded by R-index. Sidebar selection or a polygon click flies the camera in, tilts to 2.5D, and reveals 3D building extrusion in the CBD via Google Maps' WebGL vector renderer. A top-left **2D / 3D toggle** lets viewers flatten the view; preference persists in localStorage. The top-r_index suburb has a permanent pulsing golden ring; every selection fires a screen-projected burst animation. The detail card shows pillar scores plus a live **advisor chat** that streams Claude responses contextualised to that suburb. A small **(i) provenance icon** next to the suburb name expands a panel showing where that suburb's data actually came from — real / partial / SEIFA-approximated — with links to each underlying dataset.
 
-**At `/quests`** — the quest board. Five hand-curated seed quests (one per suburb, each targeting its weakest pillar) load on first paint. Per-suburb "Generate quest" buttons replace the seed with a fresh Claude-generated quest; the generated ones persist to localStorage so they survive a refresh. Quests generated from the advisor chat appear here too — the two surfaces share state.
+**At `/quests`** — the quest board. Five hand-curated seed quests (one per suburb, marked **EXAMPLE**, each targeting its weakest pillar) load on first paint. Per-suburb **"Regenerate with Claude →"** buttons replace the seed with a fresh AI-generated quest (marked **AI**); the generated ones persist to localStorage so they survive a refresh. Quests generated from the advisor chat appear here too — the two surfaces share state. Every AI card shows a **SIGNAL strip** explaining in one sentence which pillar Claude targeted and the data point that drove the choice (e.g. *"Carlton scored 27/100 — the lowest of its five pillars"*); the **"How this was created"** expander lists the model, generation timestamp, the full inputs Claude saw, and links to the underlying datasets.
 
-**At `/pitch`** — the long-form pitch. Editorial scroll-paced narrative covering vision → pillars → loop → agents → game layer → honest data provenance → stack → roadmap. Real screenshots from the prototype embedded as field reports.
+**At `/pitch`** — the long-form pitch. Editorial scroll-paced narrative covering vision → pillars → loop → agents → game layer → honest data provenance → stack → roadmap. Section 07 lists each suburb's data sources with links; section 09 tracks sprint state. Real screenshots from the prototype embedded as field reports.
 
-**At `/login` + `/app/profile`** — demo auth. Pick a preset persona (Maya/Carlton, Tom/Brunswick, Sofia/Footscray) or "play yourself" with a custom name + suburb. Profile shows level + XP bar + badges grid + recent activity + an inline-edit settings strip. Session persists in localStorage; the magic-link form is rendered but disabled until Supabase is provisioned.
+**At `/login` + `/app/profile`** — demo auth. Pick a preset persona (Maya/Carlton, Tom/Brunswick, Sofia/Footscray, **Admin · Demo**) or "play yourself" with a custom name + suburb. Profile shows level + XP bar + badges grid + recent activity + an inline-edit settings strip. Session persists in localStorage; the magic-link form is rendered but disabled until Supabase is provisioned.
+
+**At `/admin`** — operator surface, gated on `profile.is_admin === true`. Three counters (Examples / AI generated / Empty), a one-click **"Generate all 5 with Claude →"** button that fires the agent in parallel, and **"Reset all to example"** for repeat demos. Sign in as **Admin · Demo** to reach it.
 
 ## Stack
 
@@ -133,10 +135,10 @@ Use [SPRINT_PLAN.md](SPRINT_PLAN.md) for the authoritative checklist. Headline p
 - Sprint 0 — scaffold, env, Vercel auto-deploy: **done**
 - Sprint 1 — Victorian open-data pipeline: **done (within current infra)**; `pnpm seed:suburbs` hydrates `mock-suburbs.ts` from real Melbourne open data with honest provenance per suburb
 - Sprint 2 — Supabase schema + RLS: **done offline**; 13 migrations + hand-typed `Database` generic for `SupabaseClient<Database>` + `hooks.server.ts` with typed-Proxy fallback. Awaits one user action (provisioning the Supabase project) to go live.
-- Sprint 3 — Map: **2.5D map live** (Google Maps WebGL vector renderer with tilt + 3D buildings, real OSM suburb polygons, top-suburb pulse, selection burst). Particle flow + XP-burst on level-up still pending.
-- Sprint 4 — Auth & profile: **demo mode live** (persona picker → /app/profile with XP, badges, activity). Real magic-link auth gated on Supabase provisioning.
-- Sprint 5 — Quest board UI: **partial** (board + cards live, seed quests + persistence done; submission form pending in Sprint 7)
-- Sprint 6 — Quest Generator agent: **partial** (endpoint live; DB upsert + dedup + admin UI pending)
+- Sprint 3 — Map: **2.5D map live** (Google Maps WebGL vector renderer with tilt + 3D buildings, real OSM suburb polygons, 2D/3D toggle, top-suburb pulse, selection burst, per-suburb provenance (i) icon). Particle flow + XP-burst on level-up still pending.
+- Sprint 4 — Auth & profile: **demo mode live** (persona picker including an Admin role → /app/profile with XP, badges, activity; /admin route gated on `profile.is_admin`). Real magic-link auth gated on Supabase provisioning.
+- Sprint 5 — Quest board UI: **partial** (board + cards live, seed quests + persistence + EXAMPLE/AI source chips done; submission form pending in Sprint 7)
+- Sprint 6 — Quest Generator agent: **mostly done** — endpoint live, returns full data_snapshot + model + timestamp, surfaces "AI signal" + "How this was created" panel on every card. Edge-function deployment + DB upsert pending.
 - Sprint 7 — Submission Verifier: pending
 - Sprint 8 — Resource Matchmaker + Exchange UI: pending
 - Sprint 9 — Narrator + Advisor: **partial** (both agents live; weekly cron + dedicated suburb route pending)
